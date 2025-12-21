@@ -57,7 +57,7 @@ const AudioSystem = {
         }
 
         this.currentBgmIndex = index;
-        const path = `BGM/BGM_${index}.mp3`;
+        const path = `bgm/bgm_${index}.mp3`;
         console.log("Playing BGM:", path);
 
         this.bgmEl = new Audio(path);
@@ -163,3 +163,4 @@ const AudioSystem = {
         }
     }
 };
+
