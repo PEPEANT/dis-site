@@ -1,1 +1,1330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>발렛의 전설 V2.2 (최종)</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700&display=swap');
 
+    :root {
+      --ui-bg-top: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+      --ui-bg-bottom: linear-gradient(to top, rgba(0,0,0,0.92), transparent);
+      --glass: rgba(255,255,255,0.10);
+      --glass2: rgba(255,255,255,0.18);
+      --line: rgba(255,255,255,0.22);
+      --text: #ffffff;
+      --yellow: #f6e05e;
+      --red: #fc8181;
+      --green: #68d391;
+      --blue: #63b3ed;
+      --asphalt: #2a2f3a;
+      --asphalt2: #232834;
+      --concrete: #8a93a3;
+      --hazard: #f6ad55;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0; padding: 0; overflow: hidden;
+      background: #0f172a;
+      font-family: 'Noto Sans KR', sans-serif;
+      touch-action: none;
+      user-select: none; -webkit-user-select: none;
+      overscroll-behavior: none;
+    }
+
+    #gameContainer { position: relative; width: 100vw; height: 100vh; }
+    #gameCanvas { display: block; width: 100%; height: 100%; background: #0b1220; }
+
+    /* UI Layer */
+    #ui-layer {
+      position: absolute; inset: 0;
+      pointer-events: none;
+      display: flex; flex-direction: column; justify-content: space-between;
+      z-index: 20;
+    }
+
+    .hud {
+      padding: 14px 16px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      background: var(--ui-bg-top);
+      color: var(--text);
+      pointer-events: auto;
+      width: 100%;
+    }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-weight: 800;
+      color: rgba(255,255,255,0.75);
+      letter-spacing: 0.2px;
+      font-size: 12px;
+    }
+    .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 12px rgba(246,224,94,0.5); }
+
+    .money {
+      font-family: 'Black Han Sans', system-ui, sans-serif;
+      font-size: 34px;
+      color: var(--yellow);
+      text-shadow: 0 2px 0 rgba(0,0,0,0.35);
+      line-height: 1.05;
+    }
+
+    .rightBox { text-align: right; }
+    .rightBox .label { font-size: 11px; font-weight: 800; color: rgba(252,129,129,0.85); }
+    .rightBox .value { font-size: 20px; font-weight: 900; color: #ff5a5a; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+
+    /* Controls */
+    #controls {
+      padding: 18px 18px max(18px, env(safe-area-inset-bottom));
+      display: flex; justify-content: space-between; align-items: flex-end;
+      background: var(--ui-bg-bottom);
+      pointer-events: auto;
+      height: 240px; width: 100%;
+      gap: 10px;
+    }
+
+    .hintBar {
+      position: absolute;
+      left: 12px; right: 12px;
+      bottom: 250px;
+      display: flex; justify-content: center;
+      pointer-events: none;
+      z-index: 25;
+    }
+    .hint {
+      pointer-events: none;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: rgba(255,255,255,0.92);
+      font-weight: 700;
+      font-size: 12px;
+      backdrop-filter: blur(6px);
+    }
+
+    /* Walking Controls */
+    .d-pad { position: relative; width: 140px; height: 140px; display: block; flex-shrink: 0; }
+    .d-btn {
+      position: absolute; width: 46px; height: 46px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 10px;
+      color: white;
+      display: flex; justify-content: center; align-items: center;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: none;
+    }
+    .d-btn:active, .d-btn.active { background: rgba(255,255,255,0.45); transform: translateY(1px); }
+    .d-up { top: 0; left: 47px; } .d-down { bottom: 0; left: 47px; }
+    .d-left { top: 47px; left: 0; } .d-right { top: 47px; right: 0; }
+
+    /* Driving Controls */
+    .drive-controls { display: none; width: 100%; justify-content: space-between; align-items: flex-end; }
+    .pedals { display: flex; gap: 12px; margin-right: 8px; }
+    .pedal-btn {
+      width: 72px; height: 92px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.28);
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      font-weight: 900; color: white;
+      transition: transform 0.08s;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 10px 18px rgba(0,0,0,0.35);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: none;
+    }
+    .pedal-brake { background: linear-gradient(180deg, #ff5a5a, #d13c3c); }
+    .pedal-gas { background: linear-gradient(180deg, #62d39a, #3cab78); height: 104px; }
+    .pedal-btn:active, .pedal-btn.active { transform: scale(0.96); opacity: 0.92; }
+
+    .steering-wheel-container { display: flex; flex-direction: column; align-items: center; position: relative; }
+    .steering-wheel {
+      width: 140px; height: 140px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.08), rgba(0,0,0,0.55));
+      border: 7px solid rgba(203,213,224,0.9);
+      border-radius: 50%;
+      position: relative;
+      transform: rotate(0deg);
+      transition: transform 0.08s;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.35), 0 14px 24px rgba(0,0,0,0.35);
+      overflow: hidden;
+      touch-action: none;
+    }
+    .steering-bar { position: absolute; top: 50%; left: -10%; width: 120%; height: 10px; background: rgba(203,213,224,0.95); margin-top: -5px; transform: rotate(0deg); }
+    .steer-touch-left, .steer-touch-right { position: absolute; top: 0; height: 100%; width: 50%; z-index: 10; }
+    .steer-touch-left { left: 0; } .steer-touch-right { right: 0; }
+    .steer-touch-left::after, .steer-touch-right::after {
+      content: "";
+      position: absolute; inset: 10px;
+      border-radius: 999px;
+      border: 1px dashed rgba(255,255,255,0.08);
+    }
+
+    #actionBtn {
+      width: 92px; height: 92px;
+      background: radial-gradient(circle at 30% 30%, #57b0ff, #2563eb);
+      border: 4px solid rgba(255,255,255,0.18);
+      border-radius: 50%;
+      color: white;
+      font-family: 'Black Han Sans', system-ui, sans-serif;
+      font-size: 18px;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      box-shadow: 0 18px 30px rgba(0,0,0,0.45);
+      margin-bottom: 22px;
+      flex-shrink: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    #actionBtn:active { transform: scale(0.96); }
+    .sub-text { font-size: 11px; font-family: 'Noto Sans KR', sans-serif; opacity: 0.85; font-weight: 800; }
+
+    .screen {
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.08), rgba(0,0,0,0.95));
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      color: white; z-index: 50; text-align: center;
+      padding: 18px;
+    }
+    .hidden { display: none !important; }
+
+    .title {
+      font-family: 'Black Han Sans', system-ui, sans-serif;
+      font-size: 46px;
+      color: var(--yellow);
+      text-shadow: 0 4px 0 rgba(0,0,0,0.25);
+      margin: 0 0 4px;
+    }
+    .subtitle {
+      margin: 0 0 16px;
+      font-weight: 900;
+      opacity: 0.9;
+      letter-spacing: 0.3px;
+    }
+
+    .panel {
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 16px;
+      padding: 14px 14px;
+      text-align: left;
+      font-size: 13px;
+      color: rgba(255,255,255,0.88);
+      width: min(520px, 92vw);
+      line-height: 1.6;
+      backdrop-filter: blur(6px);
+    }
+    .panel b { color: rgba(255,255,255,0.96); }
+
+    .btn-start {
+      margin-top: 16px;
+      padding: 14px 42px;
+      border-radius: 999px;
+      border: none;
+      font-family: 'Black Han Sans', system-ui, sans-serif;
+      font-size: 24px;
+      color: #1a202c;
+      background: linear-gradient(180deg, #f6e05e, #d69e2e);
+      cursor: pointer;
+      box-shadow: 0 8px 0 #b7791f, 0 16px 28px rgba(0,0,0,0.35);
+      transition: transform 0.1s;
+    }
+    .btn-start:active { transform: translateY(6px); box-shadow: 0 2px 0 #b7791f, 0 10px 18px rgba(0,0,0,0.28); }
+    .btn-muted {
+      background: linear-gradient(180deg, #a0aec0, #718096) !important;
+      color: #0b1220 !important;
+      box-shadow: 0 8px 0 #4a5568, 0 16px 28px rgba(0,0,0,0.35) !important;
+    }
+
+    .damage-flash {
+      position: absolute; inset: 0;
+      background: #ff0000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s;
+      z-index: 10;
+      mix-blend-mode: screen;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="damageFlash" class="damage-flash"></div>
+
+    <div class="hintBar"><div id="hint" class="hint">이동: 방향키/WASD · 탑승/하차: Space · 모바일은 버튼 터치</div></div>
+
+    <div id="ui-layer">
+      <div class="hud">
+        <div>
+          <div class="badge"><span class="dot"></span><span id="rankBadge">초보 발렛기사</span></div>
+          <div class="money" id="scoreDisplay">0 원</div>
+        </div>
+        <div class="rightBox">
+          <div class="label">수리비 청구액</div>
+          <div class="value" id="damageCost">0 원</div>
+        </div>
+      </div>
+
+      <div id="controls">
+        <!-- Walking Controls -->
+        <div id="walkControls" class="d-pad" aria-label="walk controls">
+          <div class="d-btn d-up" data-key="ArrowUp">▲</div>
+          <div class="d-btn d-left" data-key="ArrowLeft">◀</div>
+          <div class="d-btn d-right" data-key="ArrowRight">▶</div>
+          <div class="d-btn d-down" data-key="ArrowDown">▼</div>
+        </div>
+
+        <!-- Driving Controls -->
+        <div id="driveControls" class="drive-controls" aria-label="drive controls">
+          <div class="steering-wheel-container">
+            <div class="steering-wheel" id="steeringWheel">
+              <div class="steering-bar"></div>
+              <div class="steer-touch-left" data-key="ArrowLeft"></div>
+              <div class="steer-touch-right" data-key="ArrowRight"></div>
+            </div>
+            <div style="font-size:12px; font-weight:900; opacity:0.75; margin-top:8px;">◀ 핸들 터치 ▶</div>
+          </div>
+
+          <div class="pedals">
+            <div class="pedal-btn pedal-brake" data-key="ArrowDown">후진<br>브레이크</div>
+            <div class="pedal-btn pedal-gas" data-key="ArrowUp">전진<br>엑셀</div>
+          </div>
+        </div>
+
+        <div id="actionBtn" aria-label="action">
+          <span id="btnMain">탑승</span>
+          <span id="btnSub" class="sub-text">Space</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen">
+      <h1 class="title">발렛의 전설 V2.2</h1>
+      <h2 class="subtitle">주차 지옥편 (PC/모바일 최종)</h2>
+
+      <div class="panel">
+        <div>🚶 <b>이동:</b> 방향키 / <b>WASD</b></div>
+        <div>🚗 <b>운전:</b> 전진(↑/W), 후진(↓/S), 핸들(←/A, →/D)</div>
+        <div>🅿️ <b>탑승/하차:</b> <b>Space</b></div>
+        <div>💰 <b>목표:</b> 입구에서 차를 받아 주차 → 손님 오면 출구로 정산!</div>
+        <div>🚧 <b>주의:</b> 기둥 박으면 수리비 폭탄. (충돌 판정/터치 버그 전부 수정됨)</div>
+      </div>
+
+      <button class="btn-start" id="btnStart">영업 시작</button>
+      <div style="margin-top:10px; font-size:12px; opacity:0.72; font-weight:700;">
+        ※ 사운드는 “영업 시작” 클릭 후 활성화됩니다.
+      </div>
+    </div>
+
+    <!-- End Screen -->
+    <div id="endScreen" class="screen hidden">
+      <h1 style="font-family:'Black Han Sans'; font-size:40px; color:#ff5a5a; margin:0 0 10px;">영업 종료</h1>
+      <p id="endReason" style="font-size:18px; font-weight:900; margin:0 0 10px;">파산했습니다.</p>
+      <p style="opacity:0.75; font-weight:800; margin:0;">최종 순수익</p>
+      <p id="finalScore" style="font-family:'Black Han Sans'; font-size:34px; color:var(--yellow); margin:8px 0 18px;">0 원</p>
+      <button class="btn-start btn-muted" id="btnRetry">재도전</button>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // ---------- Polyfills ----------
+  if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+      const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+      this.beginPath();
+      this.moveTo(x + rr, y);
+      this.lineTo(x + w - rr, y);
+      this.quadraticCurveTo(x + w, y, x + w, y + rr);
+      this.lineTo(x + w, y + h - rr);
+      this.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+      this.lineTo(x + rr, y + h);
+      this.quadraticCurveTo(x, y + h, x, y + h - rr);
+      this.lineTo(x, y + rr);
+      this.quadraticCurveTo(x, y, x + rr, y);
+      this.closePath();
+      return this;
+    };
+  }
+
+  // ---------- Game Config ----------
+  const CAR_WIDTH = 32;
+  const CAR_HEIGHT = 54;
+
+  const MAP_WIDTH = 1000;
+  let MAP_HEIGHT = 800;
+
+  const PARKING_W = 50;
+  const PARKING_H = 75;
+  const PILLAR_SIZE = 18;
+
+  // Physics
+  const ACCEL = 0.20;
+  const FRICTION = 0.08;
+  const BRAKE_POWER = 0.30;
+  const MAX_SPEED = 7;
+  const MAX_STEER_ANGLE = 0.8;
+  const STEER_SPEED = 0.10;
+  const STEER_RESTORE = 0.06;
+
+  // Damage tuning (너무 과하면 재미가 박살나서 약간만 완화)
+  const DMG_WALL = 45000;
+  const DMG_PILLAR = 90000;
+  const DMG_CAR = 75000;
+
+  // Bankruptcy rule
+  const BANKRUPT_LIMIT = -1000000;
+
+  let screenW = 0, screenH = 0;
+  let cameraX = 0, cameraY = 0;
+  let animationId = null;
+  let lastTime = 0;
+
+  const CAR_TYPES = [
+    { name: '소나타',   value: 3000,  tip: 1000, color: '#e53e3e' },
+    { name: '제네시스', value: 8000,  tip: 3000, color: '#1a202c' },
+    { name: '포르쉐',   value: 15000, tip: 5000, color: '#ecc94b' },
+    { name: '아반떼',   value: 2000,  tip: 500,  color: '#f7fafc' },
+    { name: 'BMW',     value: 10000, tip: 4000, color: '#3182ce' }
+  ];
+
+  // ---------- State ----------
+  let gameState = 'menu';
+  let money = 0;
+  let damageDebt = 0;
+
+  // Inputs
+  const keys = { ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false };
+
+  // Entities
+  let player = { x: 0, y: 0, r: 10, state: 'walking', targetCar: null };
+  let cars = [];
+  let customers = [];
+  let floatTexts = [];
+  let pillars = [];
+  let parkingSlots = [];
+
+  // Zones
+  let entranceZone, exitZone, keyBoxZone;
+
+  // ---------- Audio (lazy init / user gesture safe) ----------
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function playSound(type) {
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+    if (type === 'crash') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(120, now);
+      osc.frequency.exponentialRampToValueAtTime(25, now + 0.28);
+      gain.gain.setValueAtTime(0.28, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.28);
+      osc.start(); osc.stop(now + 0.28);
+    } else if (type === 'coin') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.setValueAtTime(1750, now + 0.08);
+      gain.gain.setValueAtTime(0.10, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.18);
+      osc.start(); osc.stop(now + 0.18);
+    } else if (type === 'honk') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(420, now);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.10);
+      osc.start(); osc.stop(now + 0.10);
+    }
+  }
+
+  // ---------- Robust collision (AABB) ----------
+  function getAABB(e) {
+    const w = e.w ?? 0;
+    const h = e.h ?? 0;
+    return { x: e.x - w / 2, y: e.y - h / 2, w, h };
+  }
+  function aabbHit(a, b) {
+    return (
+      a.x < b.x + b.w &&
+      a.x + a.w > b.x &&
+      a.y < b.y + b.h &&
+      a.y + a.h > b.y
+    );
+  }
+  function checkRect(a, rect) {
+    // a is center+w/h, rect is AABB already
+    const A = getAABB(a);
+    return aabbHit(A, rect);
+  }
+
+  // ---------- Utils ----------
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function getDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function addFloatText(text, x, y, c) { floatTexts.push({ text, x, y, c, life: 1.0 }); }
+
+  function resize() {
+    screenW = window.innerWidth;
+    screenH = window.innerHeight;
+    canvas.width = Math.floor(screenW * devicePixelRatio);
+    canvas.height = Math.floor(screenH * devicePixelRatio);
+    canvas.style.width = screenW + "px";
+    canvas.style.height = screenH + "px";
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+
+    MAP_HEIGHT = Math.max(screenH, 820);
+
+    if (gameState === 'menu') initMap();
+  }
+
+  function initMap() {
+    // Parking garage layout (more "주차장 느낌")
+    entranceZone = { x: 40, y: 170, w: 120, h: 130, label: "입구" };
+    keyBoxZone   = { x: MAP_WIDTH / 2 - 70, y: 70, w: 140, h: 90, label: "부스" };
+    exitZone     = { x: MAP_WIDTH - 160, y: 170, w: 120, h: 130, label: "출구" };
+
+    parkingSlots = [];
+    pillars = [];
+
+    const rows = 2;
+    const startX = 200;
+    const slotGap = 28;
+    const slotsPerRow = Math.floor((MAP_WIDTH - 380) / (PARKING_W + slotGap));
+    const startY = MAP_HEIGHT - (rows * (PARKING_H + 90));
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < slotsPerRow; c++) {
+        const px = startX + c * (PARKING_W + slotGap);
+        const py = startY + r * (PARKING_H + 60);
+
+        parkingSlots.push({
+          x: px, y: py, w: PARKING_W, h: PARKING_H,
+          id: `${r}-${c}`, occupiedBy: null
+        });
+
+        // Pillars right side
+        pillars.push({ x: px + PARKING_W + 2, y: py + PARKING_H / 2 - 4, w: PILLAR_SIZE, h: PILLAR_SIZE });
+
+        // Left side of first slot
+        if (c === 0) pillars.push({ x: px - PILLAR_SIZE - 2, y: py + PARKING_H / 2 - 4, w: PILLAR_SIZE, h: PILLAR_SIZE });
+      }
+    }
+  }
+
+  // ---------- Game Flow ----------
+  function resetGame() {
+    money = 0;
+    damageDebt = 0;
+    cars = [];
+    customers = [];
+    floatTexts = [];
+    player.state = 'walking';
+    player.targetCar = null;
+
+    initMap();
+    player.x = keyBoxZone.x + keyBoxZone.w / 2;
+    player.y = keyBoxZone.y + keyBoxZone.h + 30;
+
+    cameraX = 0; cameraY = 0;
+    lastTime = performance.now();
+  }
+
+  function startGame() {
+    ensureAudio();
+    gameState = 'playing';
+
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('endScreen').classList.add('hidden');
+
+    document.getElementById('walkControls').style.display = 'block';
+    document.getElementById('driveControls').style.display = 'none';
+    document.getElementById('btnMain').textContent = "탑승";
+    document.getElementById('btnSub').textContent = "Space";
+
+    resetGame();
+
+    // spawn loop
+    setTimeout(spawnCar, 900);
+
+    if (animationId) cancelAnimationFrame(animationId);
+    animationId = requestAnimationFrame(loop);
+  }
+
+  function endGame(reason) {
+    gameState = 'over';
+    if (animationId) cancelAnimationFrame(animationId);
+    animationId = null;
+
+    document.getElementById('endScreen').classList.remove('hidden');
+    document.getElementById('endReason').innerText = reason;
+    document.getElementById('finalScore').innerText = (money - damageDebt).toLocaleString() + " 원";
+  }
+
+  function spawnCar() {
+    if (gameState !== 'playing') return;
+
+    const busy = cars.some(c => c.state === 'arriving' || (c.x < entranceZone.x + 150 && c.y < entranceZone.y + 190));
+    if (!busy && cars.length < 10) {
+      const type = CAR_TYPES[Math.floor(Math.random() * CAR_TYPES.length)];
+      cars.push({
+        x: -80, y: entranceZone.y + entranceZone.h / 2,
+        w: CAR_WIDTH, h: CAR_HEIGHT,
+        angle: Math.PI / 2,
+        speed: 0, steerAngle: 0,
+        type,
+        state: 'arriving',
+        driver: 'ai',
+        parkingSlot: null,
+        scratch: 0,
+        id: Math.random()
+      });
+    }
+
+    setTimeout(spawnCar, 3600 + Math.random() * 4200);
+  }
+
+  // ---------- Interaction ----------
+  function handleAction() {
+    if (gameState !== 'playing') return;
+
+    if (player.state === 'walking' && player.targetCar) {
+      enterCar(player.targetCar);
+    } else if (player.state === 'driving') {
+      exitCar();
+    }
+  }
+
+  function enterCar(car) {
+    player.state = 'driving';
+    car.driver = 'player';
+
+    // if in slot, free it
+    if (car.parkingSlot) car.parkingSlot.occupiedBy = null;
+
+    document.getElementById('walkControls').style.display = 'none';
+    document.getElementById('driveControls').style.display = 'flex';
+    document.getElementById('btnMain').textContent = "하차";
+    document.getElementById('btnSub').textContent = "P / N";
+  }
+
+  function exitCar() {
+    const car = player.targetCar;
+    if (!car) { player.state = 'walking'; return; }
+
+    car.speed = 0;
+    car.driver = null;
+    player.state = 'walking';
+    player.x = car.x - 30; player.y = car.y;
+
+    document.getElementById('walkControls').style.display = 'block';
+    document.getElementById('driveControls').style.display = 'none';
+    document.getElementById('btnMain').textContent = "탑승";
+    document.getElementById('btnSub').textContent = "Space";
+
+    // Parking check (distance-based, but car will snap)
+    let parked = false;
+    for (const slot of parkingSlots) {
+      if (!slot.occupiedBy) {
+        const cx = slot.x + slot.w / 2;
+        const cy = slot.y + slot.h / 2;
+        if (getDist(car, { x: cx, y: cy }) < 28) {
+          slot.occupiedBy = car;
+          car.parkingSlot = slot;
+          car.state = 'parked';
+
+          addFloatText("주차 완료", car.x, car.y - 30, '#48bb78');
+          parked = true;
+
+          car.x = cx;
+          car.y = cy;
+          car.angle = Math.PI / 2;
+          car.steerAngle = 0;
+          break;
+        }
+      }
+    }
+
+    // Exit zone handover (AABB now)
+    if (!parked && checkRect(car, exitZone)) {
+      const owner = customers.find(c => c.car === car && c.subState === 'wait_for_car');
+      if (owner) {
+        const payment = car.type.value + car.type.tip;
+        money += payment;
+        playSound('coin');
+        addFloatText(`정산: +${(payment / 10000).toFixed(1)}만원`, car.x, car.y - 40, 'gold');
+
+        car.driver = 'ai';
+        car.state = 'exiting';
+        owner.subState = 'leave_in_car';
+
+        if (money - damageDebt < BANKRUPT_LIMIT) endGame("파산 (부채 과다)");
+      } else {
+        addFloatText("아직 차주 안옴", car.x, car.y - 30, 'white');
+      }
+    }
+  }
+
+  function spawnCustomer(car, action) {
+    customers.push({
+      x: car.x - 25, y: car.y,
+      action,
+      subState: 'walk_to_booth',
+      car,
+      visible: true,
+      returnTime: 0
+    });
+  }
+
+  function addDamage(car, amt) {
+    // 같은 차 연타 방지(너무 억까 방지)
+    if (car.scratch > 0 && Math.random() > 0.25) return;
+
+    car.scratch += amt;
+    damageDebt += amt;
+    playSound('crash');
+    addFloatText(`파손! -${(amt / 10000).toFixed(0)}만원`, car.x, car.y, '#ff5a5a');
+
+    const flash = document.getElementById('damageFlash');
+    flash.style.opacity = 0.55;
+    setTimeout(() => flash.style.opacity = 0, 110);
+
+    if (money - damageDebt < BANKRUPT_LIMIT) endGame("파산 (부채 과다)");
+  }
+
+  // ---------- Movement / AI ----------
+  function moveTo(e, tx, ty, spd) {
+    const dx = tx - e.x;
+    const dy = ty - e.y;
+    const d = Math.hypot(dx, dy);
+    if (d > spd) {
+      e.x += (dx / d) * spd;
+      e.y += (dy / d) * spd;
+    }
+  }
+
+  function bounceCar(car) {
+    car.speed *= -0.5;
+    car.x -= Math.cos(car.angle) * 8;
+    car.y -= Math.sin(car.angle) * 8;
+  }
+
+  function checkCarCollisions(car) {
+    // Map boundaries (AABB-based)
+    const A = getAABB(car);
+    if (A.x < 0 || A.x + A.w > MAP_WIDTH || A.y < 0 || A.y + A.h > MAP_HEIGHT) {
+      bounceCar(car);
+      addDamage(car, DMG_WALL);
+    }
+
+    // Pillars (AABB)
+    let hit = false;
+    for (const p of pillars) {
+      if (checkRect(car, p)) { hit = true; break; }
+    }
+    if (hit) {
+      bounceCar(car);
+      addDamage(car, DMG_PILLAR);
+      addFloatText("기둥 쿵!!", car.x, car.y - 40, '#ff5a5a');
+    }
+
+    // Other cars (cheap distance broadphase + AABB-ish)
+    for (const other of cars) {
+      if (car === other) continue;
+      if (Math.abs(car.x - other.x) < 60 && Math.abs(car.y - other.y) < 60) {
+        if (getDist(car, other) < 36) {
+          bounceCar(car);
+          addDamage(car, DMG_CAR);
+          addDamage(other, DMG_CAR);
+        }
+      }
+    }
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    // 탭 전환/렉 걸릴 때 dt 폭주 방지
+    dt = Math.min(dt, 40);
+    const timeScale = dt / 16.66;
+
+    // Camera follow
+    let targetCamX = player.x - screenW / 2;
+    let targetCamY = player.y - screenH / 2;
+    targetCamX = clamp(targetCamX, 0, Math.max(0, MAP_WIDTH - screenW));
+    targetCamY = clamp(targetCamY, 0, Math.max(0, MAP_HEIGHT - screenH));
+    cameraX += (targetCamX - cameraX) * 0.12;
+    cameraY += (targetCamY - cameraY) * 0.12;
+
+    // Player walking
+    if (player.state === 'walking') {
+      let dx = 0, dy = 0;
+      if (keys.ArrowUp) dy -= 1;
+      if (keys.ArrowDown) dy += 1;
+      if (keys.ArrowLeft) dx -= 1;
+      if (keys.ArrowRight) dx += 1;
+
+      if (dx !== 0 || dy !== 0) {
+        const len = Math.hypot(dx, dy);
+        player.x += (dx / len) * 5.2 * timeScale;
+        player.y += (dy / len) * 5.2 * timeScale;
+      }
+
+      player.x = clamp(player.x, 10, MAP_WIDTH - 10);
+      player.y = clamp(player.y, 10, MAP_HEIGHT - 10);
+
+      // target car selection
+      player.targetCar = null;
+      let minDist = 72;
+      for (const c of cars) {
+        const d = Math.hypot(player.x - c.x, player.y - c.y);
+        if (d < minDist && (c.state === 'waiting_valet' || c.state === 'parked' || c.state === 'retrieving')) {
+          player.targetCar = c;
+          minDist = d;
+        }
+      }
+    }
+
+    // Player driving
+    if (player.state === 'driving') {
+      const car = player.targetCar;
+      if (!car) { player.state = 'walking'; return; }
+
+      // Steering
+      if (keys.ArrowLeft) car.steerAngle -= STEER_SPEED * timeScale;
+      else if (keys.ArrowRight) car.steerAngle += STEER_SPEED * timeScale;
+      else {
+        if (car.steerAngle > 0) car.steerAngle = Math.max(0, car.steerAngle - STEER_RESTORE * timeScale);
+        else if (car.steerAngle < 0) car.steerAngle = Math.min(0, car.steerAngle + STEER_RESTORE * timeScale);
+      }
+      car.steerAngle = clamp(car.steerAngle, -MAX_STEER_ANGLE, MAX_STEER_ANGLE);
+
+      // Gas/Brake
+      if (keys.ArrowUp) car.speed += ACCEL * timeScale;
+      else if (keys.ArrowDown) car.speed -= BRAKE_POWER * timeScale;
+      else {
+        if (car.speed > 0) car.speed = Math.max(0, car.speed - FRICTION * timeScale);
+        else if (car.speed < 0) car.speed = Math.min(0, car.speed + FRICTION * timeScale);
+      }
+      car.speed = clamp(car.speed, -MAX_SPEED / 1.5, MAX_SPEED);
+
+      // Rotate depending on speed
+      if (Math.abs(car.speed) > 0.12) {
+        const dir = car.speed > 0 ? 1 : -1;
+        car.angle += car.steerAngle * (Math.abs(car.speed) / 45) * dir * timeScale;
+      }
+
+      car.x += Math.cos(car.angle) * car.speed * timeScale;
+      car.y += Math.sin(car.angle) * car.speed * timeScale;
+
+      // Sync player position
+      player.x = car.x;
+      player.y = car.y;
+
+      // UI wheel
+      const wheel = document.getElementById('steeringWheel');
+      if (wheel) wheel.style.transform = `rotate(${car.steerAngle * 85}deg)`;
+
+      // Collisions
+      checkCarCollisions(car);
+    }
+
+    // Cars AI Logic (splice bug fix: reverse loop)
+    for (let idx = cars.length - 1; idx >= 0; idx--) {
+      const c = cars[idx];
+
+      if (c.state === 'arriving') {
+        c.x += 3.0 * timeScale;
+        if (c.x > entranceZone.x + 38) {
+          c.state = 'waiting_valet';
+          spawnCustomer(c, 'drop');
+          playSound('honk');
+        }
+      } else if (c.state === 'exiting') {
+        c.x += 6.2 * timeScale;
+        if (c.x > MAP_WIDTH + 180) {
+          if (c.parkingSlot) c.parkingSlot.occupiedBy = null;
+          cars.splice(idx, 1);
+        }
+      }
+    }
+
+    // Customers AI Logic
+    for (let idx = 0; idx < customers.length; idx++) {
+      const cust = customers[idx];
+
+      if (cust.action === 'drop') {
+        if (cust.subState === 'walk_to_booth') {
+          moveTo(cust, keyBoxZone.x + keyBoxZone.w / 2, keyBoxZone.y + keyBoxZone.h / 2, 2.1 * timeScale);
+          if (getDist(cust, { x: keyBoxZone.x + keyBoxZone.w / 2, y: keyBoxZone.y + keyBoxZone.h / 2 }) < 10) {
+            cust.subState = 'leaving_map';
+            addFloatText("키 여기요", cust.x, cust.y - 20, 'white');
+          }
+        } else if (cust.subState === 'leaving_map') {
+          moveTo(cust, -60, keyBoxZone.y + 10, 3.1 * timeScale);
+          if (cust.x < -30) {
+            cust.visible = false;
+            cust.returnTime = Date.now() + 9000 + Math.random() * 22000;
+            cust.action = 'away';
+          }
+        }
+      }
+
+      else if (cust.action === 'away') {
+        if (Date.now() > cust.returnTime) {
+          cust.visible = true;
+          cust.x = -60;
+          cust.y = keyBoxZone.y + 12;
+          cust.action = 'pickup';
+          cust.subState = 'walk_to_booth';
+        }
+      }
+
+      else if (cust.action === 'pickup') {
+        if (cust.subState === 'walk_to_booth') {
+          moveTo(cust, keyBoxZone.x + keyBoxZone.w / 2, keyBoxZone.y + keyBoxZone.h / 2, 3.0 * timeScale);
+          if (getDist(cust, { x: keyBoxZone.x + keyBoxZone.w / 2, y: keyBoxZone.y + keyBoxZone.h / 2 }) < 10) {
+            cust.subState = 'wait_for_car';
+            if (cust.car.state === 'parked') cust.car.state = 'retrieving';
+            addFloatText("차 빼주세요!", cust.x, cust.y - 30, '#f6e05e');
+          }
+        } else if (cust.subState === 'wait_for_car') {
+          moveTo(cust, exitZone.x + exitZone.w / 2, exitZone.y + exitZone.h / 2, 2.0 * timeScale);
+        } else if (cust.subState === 'leave_in_car') {
+          cust.visible = false;
+        }
+      }
+    }
+
+    // Float texts
+    floatTexts = floatTexts.filter(ft => {
+      ft.y -= 0.6 * timeScale;
+      ft.life -= 0.02 * timeScale;
+      return ft.life > 0;
+    });
+
+    updateUI();
+  }
+
+  // ---------- Draw (parking garage art) ----------
+  function draw() {
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, screenW, screenH);
+
+    ctx.save();
+    ctx.translate(-Math.floor(cameraX), -Math.floor(cameraY));
+
+    // Asphalt base
+    const grad = ctx.createLinearGradient(0, 0, 0, MAP_HEIGHT);
+    grad.addColorStop(0, '#242a36');
+    grad.addColorStop(1, '#1e2430');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+
+    // Subtle asphalt noise (cheap)
+    ctx.globalAlpha = 0.08;
+    for (let i = 0; i < 140; i++) {
+      const x = (i * 73) % MAP_WIDTH;
+      const y = (i * 131) % MAP_HEIGHT;
+      ctx.fillStyle = 'white';
+      ctx.fillRect(x, y, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    // Outer walls
+    ctx.fillStyle = '#161b25';
+    ctx.fillRect(0, 0, MAP_WIDTH, 18);
+    ctx.fillRect(0, MAP_HEIGHT - 18, MAP_WIDTH, 18);
+    ctx.fillRect(0, 0, 18, MAP_HEIGHT);
+    ctx.fillRect(MAP_WIDTH - 18, 0, 18, MAP_HEIGHT);
+
+    // Lane markings
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 2;
+    for (let x = 80; x < MAP_WIDTH; x += 120) {
+      ctx.beginPath();
+      ctx.moveTo(x, 18);
+      ctx.lineTo(x, MAP_HEIGHT - 18);
+      ctx.stroke();
+    }
+
+    // Direction arrows
+    ctx.globalAlpha = 0.22;
+    drawArrow(110, entranceZone.y + entranceZone.h + 40, 0);
+    drawArrow(MAP_WIDTH - 120, exitZone.y + exitZone.h + 40, 0);
+    ctx.globalAlpha = 1;
+
+    // Zones
+    drawZone(entranceZone, '#1d4ed8');
+    drawZone(exitZone, '#16a34a');
+    drawZone(keyBoxZone, '#d97706');
+
+    // Parking slots
+    for (const s of parkingSlots) {
+      // Slot background
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(s.x, s.y, s.w, s.h);
+
+      // Slot borders
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(s.x, s.y, s.w, s.h);
+
+      // Slot center marking
+      ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(s.x + 6, s.y + s.h - 10);
+      ctx.lineTo(s.x + s.w - 6, s.y + s.h - 10);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      ctx.font = '900 12px "Noto Sans KR"';
+      ctx.textAlign = 'center';
+      ctx.fillText("P", s.x + s.w / 2, s.y + s.h / 2 + 4);
+    }
+
+    // Pillars (more realistic)
+    for (const p of pillars) {
+      // concrete body
+      ctx.fillStyle = '#7b8598';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+
+      // top highlight
+      ctx.fillStyle = '#cbd5e0';
+      ctx.fillRect(p.x, p.y - 4, p.w, 4);
+
+      // side shadow
+      ctx.fillStyle = '#4b5563';
+      ctx.fillRect(p.x + p.w, p.y, 2, p.h);
+
+      // hazard stripe
+      ctx.fillStyle = '#f6ad55';
+      ctx.fillRect(p.x, p.y + p.h / 2 - 2, p.w, 4);
+    }
+
+    // Cars
+    for (const c of cars) drawCar(c);
+
+    // Customers
+    for (const c of customers) {
+      if (!c.visible) continue;
+      ctx.fillStyle = '#f6e05e';
+      ctx.beginPath(); ctx.arc(c.x, c.y, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0b1220';
+      ctx.font = '900 10px "Noto Sans KR"';
+      ctx.textAlign = 'center';
+      if (c.action === 'drop') ctx.fillText("키", c.x, c.y - 10);
+      if (c.subState === 'wait_for_car') ctx.fillText("내차!", c.x, c.y - 10);
+    }
+
+    // Player
+    if (player.state === 'walking') {
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath(); ctx.arc(player.x, player.y, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.font = '900 10px "Noto Sans KR"';
+      ctx.fillText("나", player.x, player.y - 14);
+
+      if (player.targetCar) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(player.x, player.y, 26, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    // FX float texts
+    for (const t of floatTexts) {
+      ctx.fillStyle = t.c;
+      ctx.font = '900 16px "Noto Sans KR"';
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+      ctx.lineWidth = 4;
+      ctx.strokeText(t.text, t.x, t.y);
+      ctx.fillText(t.text, t.x, t.y);
+    }
+
+    ctx.restore();
+  }
+
+  function drawArrow(x, y, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.moveTo(0, -14);
+    ctx.lineTo(18, 10);
+    ctx.lineTo(6, 10);
+    ctx.lineTo(6, 26);
+    ctx.lineTo(-6, 26);
+    ctx.lineTo(-6, 10);
+    ctx.lineTo(-18, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawZone(z, base) {
+    // pad painted area
+    ctx.fillStyle = base;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(z.x, z.y, z.w, z.h);
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(z.x, z.y, z.w, z.h);
+
+    // sign header
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(z.x, z.y, z.w, 26);
+
+    ctx.fillStyle = 'white';
+    ctx.font = '900 16px "Black Han Sans"';
+    ctx.textAlign = 'center';
+    ctx.fillText(z.label, z.x + z.w / 2, z.y + 20);
+  }
+
+  function drawCar(c) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.angle + Math.PI / 2);
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(-c.w/2 + 4, -c.h/2 + 6, c.w, c.h);
+
+    // Wheels
+    ctx.fillStyle = '#0b1220';
+    // Front
+    ctx.save(); ctx.translate(-c.w/2, -c.h/3); ctx.rotate(c.steerAngle); ctx.fillRect(-3, -6, 6, 12); ctx.restore();
+    ctx.save(); ctx.translate( c.w/2, -c.h/3); ctx.rotate(c.steerAngle); ctx.fillRect(-3, -6, 6, 12); ctx.restore();
+    // Rear
+    ctx.fillRect(-c.w/2 - 3, c.h/3 - 6, 6, 12);
+    ctx.fillRect( c.w/2 - 3, c.h/3 - 6, 6, 12);
+
+    // Body
+    ctx.fillStyle = c.type.color;
+    ctx.roundRect(-c.w/2, -c.h/2, c.w, c.h, 6);
+    ctx.fill();
+
+    // Side gloss
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(-c.w/2, -c.h/2, c.w/4, c.h);
+
+    // Windshield
+    ctx.fillStyle = '#1f3b64';
+    ctx.roundRect(-c.w/2 + 3, -c.h/4, c.w - 6, c.h/4, 2);
+    ctx.fill();
+    ctx.roundRect(-c.w/2 + 3, c.h/7, c.w - 6, c.h/5, 2);
+    ctx.fill();
+
+    // Roof
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(-c.w/2 + 4, -c.h/10, c.w - 8, c.h/4);
+
+    // Headlights
+    ctx.fillStyle = (Math.abs(c.speed) > 0.1 || c.state === 'waiting_valet' || c.driver === 'player') ? '#fff07a' : '#4b5563';
+    ctx.shadowColor = '#fff07a';
+    ctx.shadowBlur = (c.driver === 'player') ? 10 : 0;
+    ctx.fillRect(-c.w/2 + 2, -c.h/2, 6, 4);
+    ctx.fillRect( c.w/2 - 8, -c.h/2, 6, 4);
+    ctx.shadowBlur = 0;
+
+    // Brake lights
+    if (keys.ArrowDown && c.driver === 'player' && c.speed > 0) {
+      ctx.fillStyle = '#ff3b3b';
+      ctx.shadowColor = '#ff3b3b';
+      ctx.shadowBlur = 10;
+    } else {
+      ctx.fillStyle = '#4a0f0f';
+    }
+    ctx.fillRect(-c.w/2 + 2, c.h/2 - 4, 6, 4);
+    ctx.fillRect( c.w/2 - 8, c.h/2 - 4, 6, 4);
+    ctx.shadowBlur = 0;
+
+    // Damage scratch
+    if (c.scratch > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-10, -10); ctx.lineTo(10, 10);
+      ctx.moveTo(10, -10); ctx.lineTo(-10, 10);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Status icon
+    if (c.state === 'retrieving') {
+      ctx.fillStyle = '#ff5a5a';
+      ctx.font = '24px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('❗', c.x, c.y - 35);
+    }
+  }
+
+  // ---------- UI ----------
+  function updateUI() {
+    document.getElementById('scoreDisplay').textContent = money.toLocaleString() + ' 원';
+    document.getElementById('damageCost').textContent = '-' + damageDebt.toLocaleString() + ' 원';
+
+    const profit = money - damageDebt;
+    let rank = "초보 발렛기사";
+    if (profit >  50000) rank = "숙련된 조교";
+    if (profit > 150000) rank = "베스트 드라이버";
+    if (profit > 300000) rank = "발렛의 신";
+    document.getElementById('rankBadge').textContent = rank;
+
+    const hint = document.getElementById('hint');
+    if (gameState === 'playing') {
+      if (player.state === 'walking') hint.textContent = "이동: 방향키/WASD · 탑승: Space · 타겟 차량 근처로!";
+      else hint.textContent = "운전: ↑/W 전진 · ↓/S 후진 · ←/A →/D 핸들 · 하차: Space";
+    }
+  }
+
+  // ---------- Loop ----------
+  function loop(t) {
+    if (gameState !== 'playing') return;
+    const dt = t - lastTime;
+    lastTime = t;
+
+    update(dt);
+    draw();
+
+    animationId = requestAnimationFrame(loop);
+  }
+
+  // ---------- Controls (PC + Mobile 안정화) ----------
+  function setKey(k, v) { if (k in keys) keys[k] = v; }
+
+  // Pointer-based button handler (PC/모바일 통합 + stuck 방지)
+  function addBtn(el, k) {
+    if (!el) return;
+
+    const start = (e) => {
+      e.preventDefault();
+      ensureAudio(); // first touch/click also can unlock audio
+      setKey(k, true);
+      el.classList.add('active');
+    };
+    const end = (e) => {
+      e.preventDefault();
+      setKey(k, false);
+      el.classList.remove('active');
+    };
+
+    el.addEventListener('pointerdown', start, { passive: false });
+    el.addEventListener('pointerup', end, { passive: false });
+    el.addEventListener('pointercancel', end, { passive: false });
+    el.addEventListener('pointerleave', end, { passive: false });
+
+    // fallback touchcancel (some old webviews)
+    el.addEventListener('touchstart', start, { passive: false });
+    el.addEventListener('touchend', end, { passive: false });
+    el.addEventListener('touchcancel', end, { passive: false });
+  }
+
+  document.querySelectorAll('.d-btn, .pedal-btn, .steer-touch-left, .steer-touch-right')
+    .forEach(e => addBtn(e, e.getAttribute('data-key')));
+
+  const actionBtn = document.getElementById('actionBtn');
+  const actionStart = (e) => { e.preventDefault(); ensureAudio(); handleAction(); actionBtn.style.transform = 'scale(0.93)'; };
+  const actionEnd = (e) => { e.preventDefault(); actionBtn.style.transform = 'scale(1)'; };
+
+  actionBtn.addEventListener('pointerdown', actionStart, { passive: false });
+  actionBtn.addEventListener('pointerup', actionEnd, { passive: false });
+  actionBtn.addEventListener('pointercancel', actionEnd, { passive: false });
+  actionBtn.addEventListener('pointerleave', actionEnd, { passive: false });
+
+  // Keyboard mapping (PC)
+  const keyMapDown = (code) => {
+    // Arrow keys
+    if (code === 'ArrowUp') setKey('ArrowUp', true);
+    if (code === 'ArrowDown') setKey('ArrowDown', true);
+    if (code === 'ArrowLeft') setKey('ArrowLeft', true);
+    if (code === 'ArrowRight') setKey('ArrowRight', true);
+
+    // WASD
+    if (code === 'KeyW') setKey('ArrowUp', true);
+    if (code === 'KeyS') setKey('ArrowDown', true);
+    if (code === 'KeyA') setKey('ArrowLeft', true);
+    if (code === 'KeyD') setKey('ArrowRight', true);
+
+    if (code === 'Space') handleAction();
+  };
+
+  const keyMapUp = (code) => {
+    if (code === 'ArrowUp') setKey('ArrowUp', false);
+    if (code === 'ArrowDown') setKey('ArrowDown', false);
+    if (code === 'ArrowLeft') setKey('ArrowLeft', false);
+    if (code === 'ArrowRight') setKey('ArrowRight', false);
+
+    if (code === 'KeyW') setKey('ArrowUp', false);
+    if (code === 'KeyS') setKey('ArrowDown', false);
+    if (code === 'KeyA') setKey('ArrowLeft', false);
+    if (code === 'KeyD') setKey('ArrowRight', false);
+  };
+
+  window.addEventListener('keydown', (e) => {
+    // 스크롤 방지
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+    ensureAudio();
+    keyMapDown(e.code);
+  }, { passive: false });
+
+  window.addEventListener('keyup', (e) => {
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+    keyMapUp(e.code);
+  }, { passive: false });
+
+  // 탭 전환/포커스 잃을 때 키 stuck 방지
+  function clearAllKeys() {
+    for (const k in keys) keys[k] = false;
+    document.querySelectorAll('.active').forEach(el => el.classList.remove('active'));
+  }
+  window.addEventListener('blur', clearAllKeys);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) clearAllKeys();
+  });
+
+  // ---------- Buttons ----------
+  document.getElementById('btnStart').addEventListener('click', startGame);
+  document.getElementById('btnRetry').addEventListener('click', () => location.reload());
+
+  // ---------- Boot ----------
+  window.addEventListener('resize', resize);
+  resize();
+  initMap();
+  updateUI();
+})();
+</script>
+</body>
+</html>
