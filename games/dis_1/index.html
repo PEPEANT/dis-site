@@ -3,140 +3,94 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-  <title>발렛의 전설 V3.2 (Stage)</title>
+  <title>발렛의 전설 (Simple)</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <div id="gameContainer">
     <canvas id="gameCanvas"></canvas>
-    <div id="damageFlash" class="damage-flash"></div>
 
-    <!-- Hint -->
-    <div class="hintBar">
-      <div id="hint" class="hint">이동: 방향키/WASD · 탑승/하차: Space · 기어: 1/2/3/4</div>
-    </div>
-
-    <!-- UI -->
-    <div id="ui-layer">
-      <div class="hud">
-        <div class="leftCol">
-          <div class="badge"><span class="dot"></span><span id="rankBadge">초보 발렛기사</span></div>
-          <div class="money" id="scoreDisplay">0 원</div>
-
-          <div class="metaRow">
-            <div class="pill">
-              <span class="k">스테이지</span>
-              <span class="v" id="stageText">1</span>
-            </div>
-            <div class="pill">
-              <span class="k">남은시간</span>
-              <span class="v" id="timeText">03:00</span>
-            </div>
-            <div class="pill">
-              <span class="k">기어</span>
-              <span class="v gear" id="gearText">P</span>
-            </div>
+    <!-- HUD -->
+    <div id="hud">
+      <div class="hudRow">
+        <div class="pill" id="timeText">⏱ 00:00</div>
+        <div class="pill" id="stageText">STAGE 1</div>
+        <div class="pill money" id="scoreDisplay">0 원</div>
+      </div>
+      <div class="hudRow">
+        <div class="quota">
+          <div class="quotaTop">
+            <span id="quotaText">목표 0 / 0</span>
+            <span class="damage">파손 -<span id="damageCost">0</span>원</span>
           </div>
-
-          <div class="quotaBox">
-            <div class="quotaTop">
-              <div>오늘 목표</div>
-              <div class="small" id="quotaText">0/0대 · 순수익 0원</div>
-            </div>
-            <div class="bar"><div id="quotaBar"></div></div>
-            <div class="quotaHint" id="quotaHint">주차 완료 → 손님 등장 → 출구 정산</div>
+          <div class="quotaBar">
+            <div id="quotaBar"></div>
           </div>
-        </div>
-
-        <div class="rightCol">
-          <div class="debtLabel">수리비 청구액</div>
-          <div class="debt" id="damageCost">-0 원</div>
         </div>
       </div>
-
-      <!-- Controls -->
-      <div id="controls">
-        <!-- Walking -->
-        <div id="walkControls" class="d-pad" aria-label="walk controls">
-          <button class="d-btn d-up" data-key="ArrowUp" aria-label="up">▲</button>
-          <button class="d-btn d-left" data-key="ArrowLeft" aria-label="left">◀</button>
-          <button class="d-btn d-right" data-key="ArrowRight" aria-label="right">▶</button>
-          <button class="d-btn d-down" data-key="ArrowDown" aria-label="down">▼</button>
-        </div>
-
-        <!-- Driving -->
-        <div id="driveControls" class="drive-controls" aria-label="drive controls">
-          <div class="steeringWrap">
-            <div class="steering-wheel" id="steeringWheel">
-              <div class="steering-bar"></div>
-              <div class="steer-touch-left" data-key="ArrowLeft"></div>
-              <div class="steer-touch-right" data-key="ArrowRight"></div>
-            </div>
-            <div class="tiny">◀ 핸들 터치 ▶</div>
-          </div>
-
-          <div class="rightControls">
-            <!-- Gear -->
-            <div class="gearPanel" aria-label="gear panel">
-              <button class="gearBtn" data-gear="R" aria-label="reverse">R</button>
-              <button class="gearBtn" data-gear="N" aria-label="neutral">N</button>
-              <button class="gearBtn" data-gear="D" aria-label="drive">D</button>
-              <button class="gearBtn" data-gear="P" aria-label="park">P</button>
-            </div>
-
-            <!-- Pedals (NO TEXT, ICON ONLY) -->
-            <div class="pedals">
-              <button id="brakeBtn" class="pedal pedal-brake" data-key="Brake" aria-label="brake">
-                <!-- brake icon -->
-                <svg viewBox="0 0 64 64" aria-hidden="true">
-                  <rect x="14" y="10" width="36" height="44" rx="10"></rect>
-                  <path d="M20 24h24M20 32h24M20 40h24" stroke-width="4" fill="none" stroke-linecap="round"></path>
-                </svg>
-              </button>
-              <button id="gasBtn" class="pedal pedal-gas" data-key="Gas" aria-label="gas">
-                <!-- gas icon -->
-                <svg viewBox="0 0 64 64" aria-hidden="true">
-                  <path d="M22 10h20c6 0 10 4 10 10v24c0 6-4 10-10 10H22c-6 0-10-4-10-10V20c0-6 4-10 10-10z"></path>
-                  <path d="M26 18h12M26 26h12M26 34h12" stroke-width="4" fill="none" stroke-linecap="round"></path>
-                  <path d="M42 22l6-6" stroke-width="4" fill="none" stroke-linecap="round"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Action -->
-        <button id="actionBtn" aria-label="action">
-          <span id="btnMain">탑승</span>
-          <span id="btnSub" class="sub-text">Space</span>
-        </button>
-      </div>
+      <div class="hint" id="hint">[영업 시작]을 눌러 시작</div>
     </div>
 
-    <!-- Screens -->
+    <!-- Start / End screens -->
     <div id="startScreen" class="screen">
-      <h1 class="title">발렛의 전설 V3.2</h1>
-      <h2 class="subtitle">3분 단위 스테이지 진행(일반 → 고급)</h2>
-
-      <div class="panel">
-        <div>🚶 <b>이동:</b> 방향키 / WASD</div>
-        <div>🅿️ <b>탑승/하차:</b> Space</div>
-        <div>⚙️ <b>기어:</b> <b>1=P</b> / <b>2=R</b> / <b>3=N</b> / <b>4=D</b> (모바일은 버튼)</div>
-        <div>🦶 <b>페달:</b> (PC) W=엑셀 / S=브레이크 · (모바일) 아이콘 터치</div>
-        <div>⏱️ <b>스테이지:</b> 3분 동안 목표 달성 → 다음 3분은 고급차/팁↑</div>
-        <div>✅ <b>핵심 룰:</b> 주차 완료해야 손님이 “픽업”으로 등장</div>
+      <div class="card">
+        <div class="title">발렛의 전설</div>
+        <div class="sub">3분 + 3분, 총 6분</div>
+        <ul class="bullets">
+          <li><b>SPACE</b>: 상호작용(탑승/하차/주차/인도)</li>
+          <li><b>WASD</b>: 이동 · 운전(운전 중 W=가스, S=브레이크)</li>
+          <li><b>1~4</b>: P/R/N/D 기어</li>
+        </ul>
+        <button id="btnStart" class="btnPrimary">영업 시작</button>
       </div>
-
-      <button class="btn-start" id="btnStart">영업 시작</button>
-      <div class="footnote">※ 모바일은 사파리/크롬에서 “주소창 숨김”되면 더 잘 맞음</div>
     </div>
 
     <div id="endScreen" class="screen hidden">
-      <h1 class="endTitle">영업 종료</h1>
-      <p id="endReason" class="endReason">시간 종료</p>
-      <p class="endLabel">최종 순수익</p>
-      <p id="finalScore" class="endScore">0 원</p>
-      <button class="btn-start btn-muted" id="btnRetry">재도전</button>
+      <div class="card">
+        <div class="title">영업 종료</div>
+        <div class="sub" id="endReason">시간 종료</div>
+        <div class="finalLabel">최종 순수익</div>
+        <div class="finalScore" id="finalScore">0 원</div>
+        <button id="btnRetry" class="btnPrimary ghost">재도전</button>
+      </div>
+    </div>
+
+    <!-- Mobile controls -->
+    <div id="controls">
+      <div id="walkControls" class="ctrlPanel">
+        <div class="ctrlLabel">이동</div>
+        <div id="joystick" class="joystick">
+          <div class="stick"></div>
+        </div>
+      </div>
+
+      <div id="driveControls" class="ctrlPanel">
+        <div class="ctrlLabel">운전</div>
+        <div class="driveRow">
+          <div id="steeringWheel" class="wheel" aria-label="steering wheel">
+            <div class="wheelMark"></div>
+          </div>
+          <div class="pedals">
+            <button id="gasBtn" class="pedal gas" aria-label="accelerator">
+              <span class="icon">▲</span>
+            </button>
+            <button id="brakeBtn" class="pedal brake" aria-label="brake">
+              <span class="icon">■</span>
+            </button>
+          </div>
+        </div>
+        <div class="gearRow" id="gearRow">
+          <button class="gearBtn" data-gear="P">P</button>
+          <button class="gearBtn" data-gear="R">R</button>
+          <button class="gearBtn" data-gear="N">N</button>
+          <button class="gearBtn on" data-gear="D">D</button>
+          <div class="gearText" id="gearText">D</div>
+        </div>
+      </div>
+
+      <button id="actionBtn" class="actionBtn" aria-label="action">
+        <span>␣</span>
+      </button>
     </div>
   </div>
 
