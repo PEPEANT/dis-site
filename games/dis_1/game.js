@@ -1,1169 +1,853 @@
 (() => {
+  "use strict";
+
+  // ============================================================
+  //  발렛의 전설 (Simple)
+  //  - 텍스트 최소화 / 오류 제거 / 시작 안정화
+  // ============================================================
+
   const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { alpha: false });
 
-  // ========= Small helpers =========
-  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-  const dist = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-  const fmtMoney = (n)=>n.toLocaleString()+" 원";
-  const pad2 = (n)=>String(n).padStart(2,"0");
-  const mmss = (sec)=>`${pad2(Math.floor(sec/60))}:${pad2(sec%60)}`;
+  // DOM
+  const elStart = document.getElementById("startScreen");
+  const elEnd = document.getElementById("endScreen");
+  const btnStart = document.getElementById("btnStart");
+  const btnRetry = document.getElementById("btnRetry");
+  const elTime = document.getElementById("timeText");
+  const elStage = document.getElementById("stageText");
+  const elMoney = document.getElementById("scoreDisplay");
+  const elQuotaText = document.getElementById("quotaText");
+  const elQuotaBar = document.getElementById("quotaBar");
+  const elHint = document.getElementById("hint");
+  const elFinal = document.getElementById("finalScore");
+  const elReason = document.getElementById("endReason");
+  const elDamageCost = document.getElementById("damageCost");
 
-  // polyfill roundRect
-  if (!CanvasRenderingContext2D.prototype.roundRect) {
-    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
-      const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
-      this.beginPath();
-      this.moveTo(x + rr, y);
-      this.lineTo(x + w - rr, y);
-      this.quadraticCurveTo(x + w, y, x + w, y + rr);
-      this.lineTo(x + w, y + h - rr);
-      this.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
-      this.lineTo(x + rr, y + h);
-      this.quadraticCurveTo(x, y + h, x, y + h - rr);
-      this.lineTo(x, y + rr);
-      this.quadraticCurveTo(x, y, x + rr, y);
-      this.closePath();
-      return this;
+  const elWalk = document.getElementById("walkControls");
+  const elDrive = document.getElementById("driveControls");
+  const elJoystick = document.getElementById("joystick");
+  const elStick = elJoystick.querySelector(".stick");
+  const elWheel = document.getElementById("steeringWheel");
+  const elGas = document.getElementById("gasBtn");
+  const elBrake = document.getElementById("brakeBtn");
+  const elGearText = document.getElementById("gearText");
+  const elAction = document.getElementById("actionBtn");
+  const gearBtns = Array.from(document.querySelectorAll(".gearBtn"));
+
+  // helpers
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const fmtMoney = (n) => `${Math.max(0, Math.floor(n)).toLocaleString()} 원`;
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const mmss = (sec) => `${pad2(Math.floor(sec / 60))}:${pad2(sec % 60)}`;
+
+  // canvas resize (HiDPI)
+  let W = 0, H = 0, DPR = 1;
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    W = Math.max(1, Math.floor(rect.width * DPR));
+    H = Math.max(1, Math.floor(rect.height * DPR));
+    canvas.width = W;
+    canvas.height = H;
+  }
+  window.addEventListener("resize", resize, { passive: true });
+  resize();
+
+  function cssW() { return canvas.getBoundingClientRect().width; }
+  function cssH() { return canvas.getBoundingClientRect().height; }
+
+  // ============================================================
+  // Game State
+  // ============================================================
+  const Gear = { P: "P", R: "R", N: "N", D: "D" };
+
+  const CarTypes = [
+    { key: "COMPACT", label: "경차", w: 28, h: 46, base: 9000, tip: 0.10 },
+    { key: "SEDAN", label: "세단", w: 30, h: 50, base: 12000, tip: 0.12 },
+    { key: "SUV", label: "SUV", w: 34, h: 56, base: 15000, tip: 0.14 },
+    { key: "LUX", label: "고급차", w: 32, h: 54, base: 20000, tip: 0.20 },
+  ];
+
+  const CustomerLines = [
+    "조심히 부탁해요!",
+    "급해요! 빨리요!",
+    "깨끗하게만 해줘요~",
+    "고급차라 신경좀!",
+    "여기 주차 가능?",
+    "팁 드릴게요 😉",
+  ];
+
+  let running = false;
+  let ended = false;
+
+  // time: 6 minutes total; stage switch at 3 minutes
+  const TOTAL_TIME = 6 * 60;
+  const STAGE_TIME = 3 * 60;
+
+  const StageTargets = [
+    { stage: 1, target: 60000 },
+    { stage: 2, target: 120000 },
+  ];
+
+  const state = {
+    t: 0,
+    timeLeft: TOTAL_TIME,
+    stage: 1,
+    money: 0,
+    damageCost: 0,
+    stageStartMoney: 0,
+    stageTarget: StageTargets[0].target,
+    currentJob: null,
+    cars: [],
+  };
+
+  // Player
+  const player = {
+    x: 120, y: 220,
+    r: 10,
+    speed: 140,
+    inCarId: null,
+  };
+
+  function buildLot() {
+    const w = cssW(), h = cssH();
+    const margin = 18;
+    const lot = {
+      x: margin,
+      y: 64,
+      w: w - margin * 2,
+      h: h - 64 - 110,
+      drop: { x: margin + 18, y: 96, w: 92, h: 80 },
+      pickup: { x: margin + 18, y: 200, w: 92, h: 80 },
+      exit: { x: w - margin - 110, y: 96, w: 92, h: 80 },
+      obstacles: [],
+      spots: [],
     };
-  }
 
-  // ========= Config =========
-  const CAR_W = 34;
-  const CAR_H = 56;
-
-  const MAP_W = 760;
-  let MAP_H = 680;
-
-  const SLOT_W = 54;
-  const SLOT_H = 80;
-  const PILLAR = 18;
-
-  // physics
-  const ACCEL = 0.22;
-  const FRICTION = 0.08;
-  const BRAKE_POWER = 0.34;
-  const MAX_SPEED = 7.2;
-
-  const STEER_MAX = 0.85;
-  const STEER_SPEED = 0.10;
-  const STEER_RESTORE = 0.06;
-
-  // damage
-  const DMG_WALL = 38000;
-  const DMG_PILLAR = 85000;
-  const DMG_CAR = 70000;
-
-  const BANKRUPT = -1000000;
-
-  // spawn
-  const MAX_CARS = 7;
-  const SPAWN_MIN = 3400;
-  const SPAWN_MAX = 5200;
-
-  // ========= Stage system (3분 단위) =========
-  const STAGE_LEN_SEC = 180; // 3 minutes
-  const STAGES = [
-    {
-      name: "1단계(일반)",
-      duration: STAGE_LEN_SEC,
-      // 일반차 위주
-      typeWeights: { "경차": 4, "아반떼": 4, "소나타": 2, "제네시스": 0, "포르쉐": 0 },
-      tipMultiplier: 1.0,
-      goalCars: 5,
-      goalProfit: 200000
-    },
-    {
-      name: "2단계(고급)",
-      duration: STAGE_LEN_SEC,
-      // 고급차 등장 + 팁↑
-      typeWeights: { "경차": 1, "아반떼": 2, "소나타": 3, "제네시스": 3, "포르쉐": 2 },
-      tipMultiplier: 1.35,
-      goalCars: 6,
-      goalProfit: 320000
-    }
-  ];
-
-  // ========= Cars (스킨+금액) =========
-  const CAR_TYPES = [
-    { name:"경차",     basePay: 18000, tipMin: 1000, tipMax: 3000,  body:"#f7fafc", stripe:"#94a3b8", glass:"#1f3b64" },
-    { name:"아반떼",   basePay: 26000, tipMin: 1500, tipMax: 4500,  body:"#e53e3e", stripe:"#ffffff", glass:"#1f3b64" },
-    { name:"소나타",   basePay: 36000, tipMin: 2000, tipMax: 7000,  body:"#3182ce", stripe:"#93c5fd", glass:"#0f2a52" },
-    { name:"제네시스", basePay: 65000, tipMin: 3000, tipMax: 12000, body:"#111827", stripe:"#cbd5e1", glass:"#0b2a4a" },
-    { name:"포르쉐",   basePay: 98000, tipMin: 6000, tipMax: 22000, body:"#ecc94b", stripe:"#0b1220", glass:"#0b2a4a" }
-  ];
-  const typeByName = Object.fromEntries(CAR_TYPES.map(t => [t.name, t]));
-
-  // ========= Speech =========
-  const SAY = {
-    drop: ["키 여기요!", "부탁해요~", "차 조심!", "기둥 조심!", "잘 부탁!"],
-    parkedGood: ["주차 깔끔!", "역시 프로!", "오케이!", "좋아요!"],
-    pickup: ["차 빼주세요!", "출구로!", "저 급해요!", "어서요!", "빨리요!"],
-    waitBad: ["늦으면 팁 없음!", "아직도요?", "저 시간 없어요!", "빨리!"],
-    paid: ["수고했어요!", "팁 얹어드림!", "깔끔!", "다음에도!"]
-  };
-
-  // ========= UI refs =========
-  const ui = {
-    rankBadge: document.getElementById("rankBadge"),
-    score: document.getElementById("scoreDisplay"),
-    debt: document.getElementById("damageCost"),
-    quotaText: document.getElementById("quotaText"),
-    quotaBar: document.getElementById("quotaBar"),
-    stageText: document.getElementById("stageText"),
-    timeText: document.getElementById("timeText"),
-    gearText: document.getElementById("gearText"),
-    hint: document.getElementById("hint"),
-    flash: document.getElementById("damageFlash"),
-    startScreen: document.getElementById("startScreen"),
-    endScreen: document.getElementById("endScreen"),
-    endReason: document.getElementById("endReason"),
-    finalScore: document.getElementById("finalScore"),
-    btnMain: document.getElementById("btnMain"),
-    btnSub: document.getElementById("btnSub"),
-    walkControls: document.getElementById("walkControls"),
-    driveControls: document.getElementById("driveControls"),
-    steeringWheel: document.getElementById("steeringWheel")
-  };
-
-  // ========= Audio (lazy) =========
-  let audioCtx = null;
-  function ensureAudio(){
-    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if(audioCtx.state === "suspended") audioCtx.resume();
-  }
-  function playSound(type){
-    if(!audioCtx) return;
-    if(audioCtx.state === "suspended") audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    const now = audioCtx.currentTime;
-    if(type==="crash"){
-      osc.type="sawtooth";
-      osc.frequency.setValueAtTime(120, now);
-      osc.frequency.exponentialRampToValueAtTime(28, now+0.28);
-      gain.gain.setValueAtTime(0.26, now);
-      gain.gain.linearRampToValueAtTime(0, now+0.28);
-      osc.start(); osc.stop(now+0.28);
-    } else if(type==="coin"){
-      osc.type="sine";
-      osc.frequency.setValueAtTime(1200, now);
-      osc.frequency.setValueAtTime(1750, now+0.08);
-      gain.gain.setValueAtTime(0.10, now);
-      gain.gain.linearRampToValueAtTime(0, now+0.18);
-      osc.start(); osc.stop(now+0.18);
-    } else if(type==="honk"){
-      osc.type="square";
-      osc.frequency.setValueAtTime(420, now);
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.linearRampToValueAtTime(0, now+0.10);
-      osc.start(); osc.stop(now+0.10);
-    }
-  }
-
-  // ========= World state =========
-  let screenW=0, screenH=0;
-  let camX=0, camY=0;
-  let lastTime=0;
-  let raf=null;
-
-  let gameState="menu";
-
-  let money=0;
-  let debt=0;
-  let servedCars=0; // payout count in current stage
-
-  // stage
-  let stageIndex=0;
-  let stageTimeLeft=STAGES[0].duration;
-  let stageGoalCars=STAGES[0].goalCars;
-  let stageGoalProfit=STAGES[0].goalProfit;
-
-  // gear + inputs
-  const Gear = { P:"P", R:"R", N:"N", D:"D" };
-  let gear = Gear.P;
-
-  // "가스/브레이크"는 별도 입력으로 관리 (키/터치)
-  let gasPressed=false;
-  let brakePressed=false;
-
-  const keys = { ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false };
-
-  // entities
-  let player = { x:0, y:0, r:10, state:"walking", targetCar:null };
-  let cars = [];
-  let customers = [];
-  let floatTexts = [];
-
-  // map objects
-  let slots = [];
-  let pillars = [];
-  let cones = [];
-  let speedBumps = [];
-
-  // zones
-  let entrance, exitZ, booth;
-
-  // ========= Geometry / collision =========
-  function getAABB(e){
-    return { x:e.x - e.w/2, y:e.y - e.h/2, w:e.w, h:e.h };
-  }
-  function aabbHit(a,b){
-    return (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y);
-  }
-  function checkRect(entity, rect){
-    return aabbHit(getAABB(entity), rect);
-  }
-
-  // ========= UI update =========
-  function updateUI(){
-    ui.score.textContent = fmtMoney(money);
-    ui.debt.textContent = "-"+fmtMoney(debt).replace(" 원"," 원");
-
-    const profit = money - debt;
-    let rank="초보 발렛기사";
-    if(profit >  80000) rank="숙련된 조교";
-    if(profit > 200000) rank="베스트 드라이버";
-    if(profit > 350000) rank="발렛의 신";
-    ui.rankBadge.textContent = rank;
-
-    ui.stageText.textContent = String(stageIndex+1);
-    ui.timeText.textContent = mmss(Math.max(0, Math.ceil(stageTimeLeft)));
-
-    ui.gearText.textContent = gear;
-
-    const carRatio = stageGoalCars ? clamp(servedCars/stageGoalCars, 0, 1) : 0;
-    const profRatio = stageGoalProfit ? clamp(profit/stageGoalProfit, 0, 1) : 0;
-    const ratio = Math.min(carRatio, profRatio);
-    ui.quotaText.textContent = `${servedCars}/${stageGoalCars}대 · 순수익 ${profit.toLocaleString()}원`;
-    ui.quotaBar.style.width = (ratio*100).toFixed(0)+"%";
-
-    if(gameState==="playing"){
-      if(player.state==="walking"){
-        ui.hint.textContent = "이동: 방향키/WASD · 타겟 차량 근처 Space로 탑승";
-      } else {
-        ui.hint.textContent = "운전: 핸들(←/A →/D) · W=가스 · S=브레이크 · 기어 1/2/3/4";
-      }
-    }
-  }
-
-  // ========= Float text / speech =========
-  function addFloat(text, x, y, c){
-    floatTexts.push({ text, x, y, c, life:1.0 });
-  }
-  function say(type, x, y){
-    const arr = SAY[type] || ["..."];
-    addFloat(arr[Math.floor(Math.random()*arr.length)], x, y, "#ffffff");
-  }
-
-  // ========= Map =========
-  function initMap(){
-    entrance = { x: 30, y: 150, w: 110, h: 120, label:"입구" };
-    booth    = { x: MAP_W/2 - 60, y: 60, w: 120, h: 80, label:"부스" };
-    exitZ    = { x: MAP_W - 140, y: 150, w: 110, h: 120, label:"출구" };
-
-    slots = [];
-    pillars = [];
-    cones = [];
-    speedBumps = [];
-
-    // 1줄 주차라인
-    const startX = 130;
-    const gap = 30;
-    const perRow = Math.floor((MAP_W - 230) / (SLOT_W + gap));
-    const y = MAP_H - 165;
-
-    for(let i=0;i<perRow;i++){
-      const px = startX + i*(SLOT_W+gap);
-      slots.push({ x:px, y:y, w:SLOT_W, h:SLOT_H, occupiedBy:null });
-
-      pillars.push({ x:px + SLOT_W + 4, y:y + SLOT_H/2 - 4, w:PILLAR, h:PILLAR });
-      if(i===0) pillars.push({ x:px - PILLAR - 4, y:y + SLOT_H/2 - 4, w:PILLAR, h:PILLAR });
-    }
-
-    for(let i=0;i<4;i++){
-      cones.push({ x: 160 + i*140, y: entrance.y + entrance.h + 80, r: 10 });
-    }
-    for(let i=0;i<3;i++){
-      speedBumps.push({ x: 210 + i*170, y: MAP_H - 240, w: 70, h: 10 });
-    }
-  }
-
-  function resize(){
-    screenW = window.innerWidth;
-    screenH = window.innerHeight;
-
-    canvas.width  = Math.floor(screenW * devicePixelRatio);
-    canvas.height = Math.floor(screenH * devicePixelRatio);
-    canvas.style.width = screenW+"px";
-    canvas.style.height = screenH+"px";
-    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-
-    MAP_H = Math.max(640, Math.min(760, screenH+20));
-    if(gameState==="menu") initMap();
-  }
-
-  // ========= Stage control =========
-  function applyStage(idx){
-    stageIndex = idx;
-    const st = STAGES[stageIndex];
-    stageTimeLeft = st.duration;
-    stageGoalCars = st.goalCars;
-    stageGoalProfit = st.goalProfit;
-    servedCars = 0; // 스테이지별로 초기화(단계별 깨는 느낌)
-    addFloat(st.name, booth.x + booth.w/2, booth.y + booth.h + 40, "#f6e05e");
-  }
-
-  function nextStageOrEnd(){
-    // 스테이지 성공 조건: 목표 차량 + 목표 수익 달성
-    const profit = money - debt;
-    const success = (servedCars >= stageGoalCars && profit >= stageGoalProfit);
-
-    if(!success){
-      endGame("시간 종료 (목표 미달성)");
-      return;
-    }
-
-    if(stageIndex+1 >= STAGES.length){
-      endGame("🎉 모든 단계 클리어!");
-      return;
-    }
-
-    // 다음 스테이지로
-    applyStage(stageIndex+1);
-
-    // 다음 단계는 고급차 느낌을 위해 즉시 스폰 약간 더
-    setTimeout(spawnCar, 600);
-    setTimeout(spawnCar, 1200);
-  }
-
-  // ========= Car type picking by weight =========
-  function pickTypeForStage(){
-    const weights = STAGES[stageIndex].typeWeights;
-    let sum = 0;
-    for(const k in weights) sum += weights[k];
-    if(sum <= 0) return CAR_TYPES[0];
-
-    let r = Math.random()*sum;
-    for(const name in weights){
-      r -= weights[name];
-      if(r <= 0) return typeByName[name] || CAR_TYPES[0];
-    }
-    return CAR_TYPES[0];
-  }
-
-  // ========= Spawning =========
-  function spawnCar(){
-    if(gameState!=="playing") return;
-
-    const busy = cars.some(c => c.state==="arriving" || (c.x < entrance.x + 160 && c.y < entrance.y + 190));
-    if(!busy && cars.length < MAX_CARS){
-      const type = pickTypeForStage();
-      const tipMul = STAGES[stageIndex].tipMultiplier;
-
-      const baseTip = type.tipMin + Math.floor(Math.random()*(type.tipMax-type.tipMin+1));
-      const tip = Math.floor(baseTip * tipMul);
-
-      cars.push({
-        x:-80, y: entrance.y + entrance.h/2,
-        w:CAR_W, h:CAR_H,
-        angle: Math.PI/2,
-        speed:0, steerAngle:0,
-        type,
-        state:"arriving", // arriving -> waiting_valet -> parked -> retrieving -> exiting
-        driver:"ai",
-        slot:null,
-        scratch:0,
-        pay:type.basePay,
-        tip,
-        id:Math.random(),
-        parkedAt:0
+    // one-row spots
+    const rowY = lot.y + lot.h - 110;
+    const spotCount = Math.max(4, Math.min(7, Math.floor((lot.w - 40) / 90)));
+    const gap = 10;
+    const spotW = 70;
+    const spotH = 100;
+    const total = spotCount * spotW + (spotCount - 1) * gap;
+    const startX = lot.x + (lot.w - total) / 2;
+    for (let i = 0; i < spotCount; i++) {
+      lot.spots.push({
+        id: i,
+        x: startX + i * (spotW + gap),
+        y: rowY,
+        w: spotW,
+        h: spotH,
+        occupiedBy: null,
+        pickupRequested: false,
       });
     }
 
-    setTimeout(spawnCar, SPAWN_MIN + Math.random()*(SPAWN_MAX - SPAWN_MIN));
+    lot.obstacles.push({ x: lot.x + lot.w * 0.45, y: lot.y + lot.h * 0.55, w: 20, h: 20 });
+    lot.obstacles.push({ x: lot.x + lot.w * 0.58, y: lot.y + lot.h * 0.40, w: 20, h: 20 });
+
+    return lot;
   }
 
-  // ========= Customers =========
-  function spawnCustomerForCar(car){
-    customers.push({
-      x: car.x - 25, y: car.y,
-      car,
-      visible:true,
-      phase:"drop_walk_booth",
-      returnTime:0,
-      impatienceAt:0
-    });
+  let lot = buildLot();
+  window.addEventListener("resize", () => { lot = buildLot(); }, { passive: true });
+
+  // ============================================================
+  // Controls
+  // ============================================================
+  const keys = { up: false, down: false, left: false, right: false };
+  let gasPressed = false;
+  let brakePressed = false;
+
+  const joy = { x: 0, y: 0, active: false, pid: null, baseX: 0, baseY: 0 };
+  const wheel = { v: 0, active: false, pid: null, startAngle: 0, startV: 0 };
+
+  function showControls() {
+    const driving = player.inCarId !== null;
+    elDrive.style.opacity = driving ? "1" : "0.25";
+    elWalk.style.opacity = driving ? "0.25" : "1";
   }
 
-  function moveTo(e, tx, ty, spd){
-    const dx = tx - e.x, dy = ty - e.y;
-    const d = Math.hypot(dx,dy);
-    if(d > spd){
-      e.x += (dx/d)*spd;
-      e.y += (dy/d)*spd;
+  function setHint(msg, holdMs = 1200) {
+    elHint.textContent = msg;
+    if (holdMs > 0) {
+      clearTimeout(setHint._t);
+      setHint._t = setTimeout(() => {
+        elHint.textContent = running ? contextHint() : "[영업 시작]을 눌러 시작";
+      }, holdMs);
     }
   }
 
-  // ========= Gear + Driving model =========
-  // 기어 규칙:
-  // P: 완전 정지(가스/브레이크 무시, 속도 0으로 수렴)
-  // N: 중립(가스 무시, 브레이크만 적용, 자연감속)
-  // D: 전진(가스=전진 가속)
-  // R: 후진(가스=후진 가속)
-  function setGear(g){
-    gear = g;
-    document.querySelectorAll(".gearBtn").forEach(b=>{
-      b.classList.toggle("active", b.getAttribute("data-gear")===gear);
-    });
-    updateUI();
-  }
-
-  // ========= Action =========
-  function handleAction(){
-    if(gameState!=="playing") return;
-
-    if(player.state==="walking" && player.targetCar){
-      enterCar(player.targetCar);
-    } else if(player.state==="driving"){
-      exitCar();
+  function contextHint() {
+    if (!running) return "[영업 시작]을 눌러 시작";
+    if (player.inCarId === null) {
+      const near = nearestInteractable();
+      if (near?.kind === "carDrop") return "SPACE: 차 맡기기(탑승)";
+      if (near?.kind === "carPickup") return "SPACE: 픽업 차량 탑승";
+      return "SPACE: 상호작용";
     }
+    const car = getCar(player.inCarId);
+    if (!car) return "SPACE: 상호작용";
+    if (car.state === "DRIVING") return "빈 주차칸에 넣고 SPACE: 주차";
+    if (car.state === "PARKED" && car.pickupRequested) return "SPACE: 픽업(운전 시작)";
+    return "SPACE: 상호작용";
   }
 
-  function enterCar(car){
-    player.state="driving";
-    player.targetCar = car;
-    car.driver="player";
+  function bindHoldButton(btn, onDown, onUp) {
+    const start = (e) => { e.preventDefault(); onDown(); };
+    const end = (e) => { e.preventDefault(); onUp(); };
+    btn.addEventListener("pointerdown", start, { passive: false });
+    btn.addEventListener("pointerup", end, { passive: false });
+    btn.addEventListener("pointercancel", end, { passive: false });
+    btn.addEventListener("pointerleave", end, { passive: false });
+  }
 
-    // 주차 슬롯 해제
-    if(car.slot) car.slot.occupiedBy=null;
+  bindHoldButton(elGas, () => { gasPressed = true; }, () => { gasPressed = false; });
+  bindHoldButton(elBrake, () => { brakePressed = true; }, () => { brakePressed = false; });
 
-    ui.walkControls.style.display="none";
-    ui.driveControls.style.display="flex";
-    ui.btnMain.textContent="하차";
-    ui.btnSub.textContent="Space";
+  elAction.addEventListener("pointerdown", (e) => { e.preventDefault(); handleAction(); }, { passive: false });
 
-    // 처음 탑승하면 기본 D로
+  function joyCenter() {
+    const r = elJoystick.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, rad: r.width / 2 };
+  }
+  elJoystick.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    joy.active = true;
+    joy.pid = e.pointerId;
+    elJoystick.setPointerCapture(e.pointerId);
+    updateJoy(e.clientX, e.clientY);
+  }, { passive: false });
+
+  elJoystick.addEventListener("pointermove", (e) => {
+    if (!joy.active || e.pointerId !== joy.pid) return;
+    e.preventDefault();
+    updateJoy(e.clientX, e.clientY);
+  }, { passive: false });
+
+  elJoystick.addEventListener("pointerup", (e) => {
+    if (e.pointerId !== joy.pid) return;
+    e.preventDefault();
+    joy.active = false;
+    joy.pid = null;
+    joy.x = 0; joy.y = 0;
+    elStick.style.transform = `translate(-50%,-50%)`;
+  }, { passive: false });
+
+  function updateJoy(px, py) {
+    const c = joyCenter();
+    const dx = px - c.x;
+    const dy = py - c.y;
+    const max = c.rad - 24;
+    const len = Math.hypot(dx, dy) || 1;
+    const k = Math.min(1, max / len);
+    const sx = dx * k;
+    const sy = dy * k;
+    joy.x = clamp(sx / max, -1, 1);
+    joy.y = clamp(sy / max, -1, 1);
+    elStick.style.transform = `translate(calc(-50% + ${sx}px), calc(-50% + ${sy}px))`;
+  }
+
+  function wheelCenter() {
+    const r = elWheel.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  elWheel.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const c = wheelCenter();
+    wheel.active = true;
+    wheel.pid = e.pointerId;
+    wheel.startV = wheel.v;
+    wheel.startAngle = Math.atan2(e.clientY - c.y, e.clientX - c.x);
+    elWheel.setPointerCapture(e.pointerId);
+  }, { passive: false });
+
+  elWheel.addEventListener("pointermove", (e) => {
+    if (!wheel.active || e.pointerId !== wheel.pid) return;
+    e.preventDefault();
+    const c = wheelCenter();
+    const ang = Math.atan2(e.clientY - c.y, e.clientX - c.x);
+    let d = ang - wheel.startAngle;
+    if (d > Math.PI) d -= Math.PI * 2;
+    if (d < -Math.PI) d += Math.PI * 2;
+    const v = clamp(wheel.startV + d / (Math.PI / 1.4), -1, 1);
+    wheel.v = v;
+  }, { passive: false });
+
+  elWheel.addEventListener("pointerup", (e) => {
+    if (e.pointerId !== wheel.pid) return;
+    e.preventDefault();
+    wheel.active = false;
+    wheel.pid = null;
+  }, { passive: false });
+
+  window.addEventListener("keydown", (e) => {
+    const c = e.code;
+    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(c)) e.preventDefault();
+
+    if (c === "KeyW" || c === "ArrowUp") keys.up = true;
+    if (c === "KeyS" || c === "ArrowDown") keys.down = true;
+    if (c === "KeyA" || c === "ArrowLeft") keys.left = true;
+    if (c === "KeyD" || c === "ArrowRight") keys.right = true;
+
+    if (c === "KeyW") gasPressed = true;
+    if (c === "KeyS") brakePressed = true;
+
+    if (c === "Space") handleAction();
+
+    if (c === "Digit1") setGear(Gear.P);
+    if (c === "Digit2") setGear(Gear.R);
+    if (c === "Digit3") setGear(Gear.N);
+    if (c === "Digit4") setGear(Gear.D);
+  }, { passive: false });
+
+  window.addEventListener("keyup", (e) => {
+    const c = e.code;
+    if (c === "KeyW" || c === "ArrowUp") keys.up = false;
+    if (c === "KeyS" || c === "ArrowDown") keys.down = false;
+    if (c === "KeyA" || c === "ArrowLeft") keys.left = false;
+    if (c === "KeyD" || c === "ArrowRight") keys.right = false;
+
+    if (c === "KeyW") gasPressed = false;
+    if (c === "KeyS") brakePressed = false;
+  }, { passive: true });
+
+  gearBtns.forEach((b) => b.addEventListener("click", () => setGear(b.getAttribute("data-gear"))));
+
+  let currentGear = Gear.D;
+  function setGear(g) {
+    currentGear = g;
+    elGearText.textContent = g;
+    gearBtns.forEach((b) => b.classList.toggle("on", b.getAttribute("data-gear") === g));
+    setHint(`기어 ${g}`, 700);
+  }
+
+  // ============================================================
+  // Entities
+  // ============================================================
+  let _carId = 1;
+  function randCustomerLine() { return CustomerLines[Math.floor(Math.random() * CustomerLines.length)]; }
+  function randCarColor() {
+    const colors = ["#60A5FA","#34D399","#FBBF24","#A78BFA","#FB7185","#22D3EE"];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  function spawnJobCar(stage) {
+    const pool = stage === 1 ? CarTypes.slice(0, 3) : CarTypes;
+    const type = pool[Math.floor(Math.random() * pool.length)];
+    const id = _carId++;
+
+    state.cars.push({
+      id,
+      typeKey: type.key,
+      w: type.w,
+      h: type.h,
+      x: lot.drop.x + lot.drop.w / 2,
+      y: lot.drop.y + lot.drop.h / 2,
+      a: 0,
+      vx: 0, vy: 0,
+      speed: 0,
+      state: "WAIT_DROP",
+      spotId: null,
+      pickupReadyAt: null,
+      pickupRequested: false,
+      damaged: 0,
+      bubble: randCustomerLine(),
+      color: randCarColor(),
+    });
+
+    setHint(`${type.label} 도착! (SPACE로 탑승)`, 1400);
+  }
+
+  function getCar(id) { return state.cars.find(c => c.id === id) || null; }
+
+  // ============================================================
+  // Action / Interaction
+  // ============================================================
+  function nearestInteractable() {
+    const px = player.x, py = player.y;
+    for (const c of state.cars) {
+      const d = Math.hypot(px - c.x, py - c.y);
+      if (d < 28) {
+        if (c.state === "WAIT_DROP") return { kind: "carDrop", car: c };
+        if (c.state === "PARKED" && c.pickupRequested) return { kind: "carPickup", car: c };
+      }
+    }
+    return null;
+  }
+
+  function handleAction() {
+    if (!running || ended) return;
+
+    if (player.inCarId !== null) {
+      const car = getCar(player.inCarId);
+      if (!car) return;
+
+      if (car.state === "PICKUP") {
+        if (rectContains(lot.pickup, car.x, car.y)) {
+          deliverCar(car);
+          return;
+        }
+      }
+
+      if (car.state === "DRIVING") {
+        const spot = findSpotUnderCar(car);
+        if (spot && isCarAligned(car) && Math.abs(car.speed) < 20) {
+          parkCar(car, spot);
+        } else {
+          setHint("주차칸 안에서 천천히! (직각/저속)", 900);
+        }
+        return;
+      }
+
+      if (car.state === "PARKED" && car.pickupRequested) {
+        startPickup(car);
+        return;
+      }
+
+      exitCar(car);
+      return;
+    }
+
+    const near = nearestInteractable();
+    if (!near) { setHint("근처에 상호작용 대상이 없음", 700); return; }
+    const car = near.car;
+
+    if (near.kind === "carDrop") { enterCar(car); return; }
+    if (near.kind === "carPickup") { enterCar(car); startPickup(car); return; }
+  }
+
+  function enterCar(car) {
+    player.inCarId = car.id;
+    if (car.state === "WAIT_DROP") car.state = "DRIVING";
+    setHint("운전 시작", 700);
+    showControls();
+  }
+
+  function exitCar(car) {
+    player.inCarId = null;
+    player.x = car.x + Math.cos(car.a + Math.PI / 2) * 18;
+    player.y = car.y + Math.sin(car.a + Math.PI / 2) * 18;
+    setHint("하차", 600);
+    showControls();
+  }
+
+  function findSpotUnderCar(car) {
+    for (const s of lot.spots) {
+      if (s.occupiedBy !== null) continue;
+      if (rectContains(s, car.x, car.y)) return s;
+    }
+    return null;
+  }
+
+  function isCarAligned(car) {
+    let a = ((car.a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const d = Math.min(Math.abs(a - 0), Math.abs(a - Math.PI * 2));
+    return d < (Math.PI / 10);
+  }
+
+  function parkCar(car, spot) {
+    car.state = "PARKED";
+    car.spotId = spot.id;
+    spot.occupiedBy = car.id;
+
+    car.x = spot.x + spot.w / 2;
+    car.y = spot.y + spot.h / 2;
+    car.a = 0;
+    car.speed = 0;
+    car.vx = 0; car.vy = 0;
+
+    exitCar(car);
+
+    car.pickupReadyAt = state.t + (5 + Math.random() * 8);
+    car.pickupRequested = false;
+
+    setHint("주차 완료! (잠시 후 픽업 요청)", 1400);
+  }
+
+  function startPickup(car) {
+    car.state = "PICKUP";
+    setHint("픽업! 픽업존에서 SPACE로 인도", 1400);
+  }
+
+  function deliverCar(car) {
+    const type = CarTypes.find(t => t.key === car.typeKey) || CarTypes[0];
+    const stageBonus = state.stage === 2 ? 1.2 : 1.0;
+
+    const base = type.base;
+    const tip = Math.floor(base * type.tip * stageBonus * (0.6 + Math.random() * 0.8));
+    const earned = base + tip;
+
+    const penalty = Math.min(earned, car.damaged);
+    state.damageCost += penalty;
+    const net = earned - penalty;
+    state.money += net;
+
+    if (car.spotId !== null) {
+      const s = lot.spots[car.spotId];
+      if (s && s.occupiedBy === car.id) s.occupiedBy = null;
+    }
+
+    state.cars = state.cars.filter(c => c.id !== car.id);
+    player.inCarId = null;
+    showControls();
+
+    setHint(`인도 완료 +${fmtMoney(net)} (팁 ${fmtMoney(tip)} / 파손 -${fmtMoney(penalty)})`, 1600);
+
+    spawnJobCar(state.stage);
+  }
+
+  function rectContains(r, x, y) {
+    return x >= r.x && x <= (r.x + r.w) && y >= r.y && y <= (r.y + r.h);
+  }
+
+  // ============================================================
+  // Damage / Collision
+  // ============================================================
+  function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
+  function carAABB(car) {
+    const m = Math.max(car.w, car.h) * 0.6;
+    return { x: car.x - m, y: car.y - m, w: m * 2, h: m * 2 };
+  }
+
+  function damage(car, amount) {
+    car.damaged += amount;
+    setHint(`파손! -${fmtMoney(amount)}`, 600);
+  }
+
+  // ============================================================
+  // Update Loop
+  // ============================================================
+  let last = performance.now();
+
+  function startGame() {
+    resetGame();
+    elStart.classList.add("hidden");
+    elEnd.classList.add("hidden");
+    running = true;
+    ended = false;
+    spawnJobCar(1);
+    showControls();
+    last = performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function resetGame() {
+    state.t = 0;
+    state.timeLeft = TOTAL_TIME;
+    state.stage = 1;
+    state.money = 0;
+    state.damageCost = 0;
+    state.stageStartMoney = 0;
+    state.stageTarget = StageTargets[0].target;
+    state.cars = [];
+    _carId = 1;
+
+    player.x = lot.drop.x + lot.drop.w + 40;
+    player.y = lot.drop.y + lot.drop.h / 2;
+    player.inCarId = null;
+
     setGear(Gear.D);
   }
 
-  function exitCar(){
-    const car = player.targetCar;
-    if(!car) { player.state="walking"; return; }
+  function endGame(reason) {
+    running = false;
+    ended = true;
+    elReason.textContent = reason;
+    elFinal.textContent = fmtMoney(state.money);
+    elEnd.classList.remove("hidden");
+    setHint("영업 종료", 0);
+  }
 
-    car.speed = 0;
-    car.driver = null;
+  btnStart.addEventListener("click", startGame);
+  btnRetry.addEventListener("click", () => {
+    elEnd.classList.add("hidden");
+    elStart.classList.remove("hidden");
+    setHint("[영업 시작]을 눌러 시작", 0);
+  });
 
-    player.state = "walking";
-    player.x = car.x - 30;
-    player.y = car.y;
+  function loop(now) {
+    if (!running) return;
+    const dt = clamp((now - last) / 1000, 0, 0.033);
+    last = now;
 
-    ui.walkControls.style.display="block";
-    ui.driveControls.style.display="none";
-    ui.btnMain.textContent="탑승";
-    ui.btnSub.textContent="Space";
+    update(dt);
+    render();
 
-    // 내리면 P로
-    setGear(Gear.P);
+    requestAnimationFrame(loop);
+  }
 
-    // 1) 주차 판정
-    let parked=false;
-    for(const s of slots){
-      if(!s.occupiedBy){
-        const cx = s.x + s.w/2, cy = s.y + s.h/2;
-        if(dist(car,{x:cx,y:cy}) < 30){
-          s.occupiedBy = car;
-          car.slot = s;
-          car.state = "parked";
-          car.angle = Math.PI/2;
-          car.steerAngle = 0;
-          car.x = cx; car.y = cy;
-          parked=true;
+  function update(dt) {
+    state.t += dt;
+    state.timeLeft = Math.max(0, TOTAL_TIME - state.t);
 
-          car.parkedAt = Date.now();
-          addFloat("주차 완료", car.x, car.y - 34, "#49d69d");
-          say("parkedGood", car.x, car.y - 54);
+    const newStage = (state.t < STAGE_TIME) ? 1 : 2;
+    if (newStage !== state.stage) {
+      state.stage = newStage;
+      state.stageStartMoney = state.money;
+      state.stageTarget = StageTargets[newStage - 1].target;
+      setHint(`STAGE ${newStage}! 고급차/팁 ↑`, 1400);
+    }
 
-          // ✅ 주차 완료해야 손님 귀환 타이머 시작
-          const cust = customers.find(c => c.car===car && c.phase==="drop_done_waiting");
-          if(cust){
-            cust.phase="away";
-            cust.returnTime = Date.now() + 7000 + Math.random()*12000;
-          }
-          break;
-        }
+    if (state.timeLeft <= 0.0001) { endGame("시간 종료"); return; }
+
+    for (const c of state.cars) {
+      if (c.state === "PARKED" && !c.pickupRequested && c.pickupReadyAt !== null && state.t >= c.pickupReadyAt) {
+        c.pickupRequested = true;
+        setHint("픽업 요청 발생! (주차칸으로 가서 SPACE)", 1400);
       }
     }
 
-    // 2) 출구 정산
-    if(!parked && checkRect(car, exitZ)){
-      const cust = customers.find(c => c.car===car && c.phase==="wait_at_exit");
-      if(cust){
-        const payment = car.pay + car.tip;
-        money += payment;
-        servedCars += 1;
+    if (player.inCarId === null) {
+      const dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+      const dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+      const mx = clamp(dx + joy.x, -1, 1);
+      const my = clamp(dy + joy.y, -1, 1);
+      const len = Math.hypot(mx, my) || 1;
 
-        playSound("coin");
-        addFloat(`정산 +${(payment/10000).toFixed(1)}만원`, car.x, car.y - 40, "gold");
-        say("paid", car.x, car.y - 60);
+      player.x += (mx / len) * player.speed * dt;
+      player.y += (my / len) * player.speed * dt;
 
-        car.driver="ai";
-        car.state="exiting";
-        cust.visible=false;
-        cust.phase="done";
-      } else {
-        addFloat("손님이 출구에 없음", car.x, car.y - 30, "white");
+      player.x = clamp(player.x, lot.x + player.r, lot.x + lot.w - player.r);
+      player.y = clamp(player.y, lot.y + player.r, lot.y + lot.h - player.r);
+    } else {
+      const car = getCar(player.inCarId);
+      if (car) updateCar(car, dt);
+    }
+
+    updateHUD();
+  }
+
+  function updateHUD() {
+    elTime.textContent = `⏱ ${mmss(Math.floor(state.timeLeft))}`;
+    elStage.textContent = `STAGE ${state.stage}`;
+    elMoney.textContent = fmtMoney(state.money);
+    elDamageCost.textContent = `${Math.floor(state.damageCost).toLocaleString()}`;
+
+    const progress = clamp((state.money - state.stageStartMoney) / state.stageTarget, 0, 1);
+    elQuotaText.textContent = `목표 ${fmtMoney(state.money - state.stageStartMoney)} / ${fmtMoney(state.stageTarget)}`;
+    elQuotaBar.style.width = `${Math.floor(progress * 100)}%`;
+  }
+
+  function updateCar(car, dt) {
+    const steerKey = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    const steer = clamp(steerKey + wheel.v, -1, 1);
+
+    const accel = 420;
+    const maxSpeed = 240;
+    const brakePower = 720;
+
+    let driveDir = 0;
+    if (currentGear === Gear.D) driveDir = 1;
+    if (currentGear === Gear.R) driveDir = -1;
+
+    if (gasPressed && (currentGear === Gear.D || currentGear === Gear.R)) {
+      car.speed = clamp(car.speed + accel * dt, -maxSpeed, maxSpeed);
+      car.speed = Math.sign(driveDir) * Math.abs(car.speed);
+    } else {
+      car.speed = lerp(car.speed, 0, 0.8 * dt);
+    }
+
+    if (brakePressed) {
+      car.speed = lerp(car.speed, 0, clamp(brakePower * dt / maxSpeed, 0, 1));
+    }
+
+    if (currentGear === Gear.P) car.speed = 0;
+
+    const turnRate = 2.2;
+    const spdNorm = clamp(Math.abs(car.speed) / maxSpeed, 0, 1);
+    car.a += steer * turnRate * spdNorm * dt;
+
+    const fx = Math.sin(car.a);
+    const fy = -Math.cos(car.a);
+
+    car.vx = fx * car.speed;
+    car.vy = fy * car.speed;
+
+    car.x += car.vx * dt;
+    car.y += car.vy * dt;
+
+    const pad = 12;
+    let hit = false;
+    if (car.x < lot.x + pad) { car.x = lot.x + pad; hit = true; }
+    if (car.x > lot.x + lot.w - pad) { car.x = lot.x + lot.w - pad; hit = true; }
+    if (car.y < lot.y + pad) { car.y = lot.y + pad; hit = true; }
+    if (car.y > lot.y + lot.h - pad) { car.y = lot.y + lot.h - pad; hit = true; }
+
+    const cb = carAABB(car);
+    for (const o of lot.obstacles) {
+      if (aabb(cb.x, cb.y, cb.w, cb.h, o.x, o.y, o.w, o.h)) {
+        car.x -= car.vx * dt * 1.2;
+        car.y -= car.vy * dt * 1.2;
+        hit = true;
       }
+    }
+
+    if (hit) {
+      car._hitCooldown = (car._hitCooldown || 0) - dt;
+      if (car._hitCooldown <= 0) {
+        car._hitCooldown = 0.4;
+        damage(car, 1200 + Math.random() * 800);
+      }
+      car.speed *= 0.25;
     }
   }
 
-  // ========= Damage =========
-  function bounceCar(car){
-    car.speed *= -0.5;
-    car.x -= Math.cos(car.angle)*8;
-    car.y -= Math.sin(car.angle)*8;
-  }
-  function addDamage(car, amt){
-    if(car.scratch > 0 && Math.random() > 0.25) return;
-    car.scratch += amt;
-    debt += amt;
-    playSound("crash");
-    addFloat(`파손! -${(amt/10000).toFixed(0)}만원`, car.x, car.y, "#ff5a5a");
-    ui.flash.style.opacity = 0.55;
-    setTimeout(()=> ui.flash.style.opacity = 0, 110);
+  // ============================================================
+  // Render
+  // ============================================================
+  function render() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#0a0f1c";
+    ctx.fillRect(0, 0, W, H);
 
-    if(money - debt < BANKRUPT) endGame("파산 (부채 과다)");
+    const scale = DPR;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+
+    drawLot();
+    drawEntities();
   }
 
-  function checkCarCollisions(car){
-    const A = getAABB(car);
-    if(A.x < 0 || A.x + A.w > MAP_W || A.y < 0 || A.y + A.h > MAP_H){
-      bounceCar(car);
-      addDamage(car, DMG_WALL);
-    }
+  function drawLot() {
+    ctx.fillStyle = "#0c1426";
+    roundRect(ctx, lot.x, lot.y, lot.w, lot.h, 18);
+    ctx.fill();
 
-    for(const p of pillars){
-      if(aabbHit(A, p)){
-        bounceCar(car);
-        addDamage(car, DMG_PILLAR);
-        addFloat("기둥 쿵!!", car.x, car.y - 40, "#ff5a5a");
-        break;
-      }
-    }
+    ctx.strokeStyle = "rgba(255,255,255,.12)";
+    ctx.lineWidth = 2;
+    roundRect(ctx, lot.x, lot.y, lot.w, lot.h, 18);
+    ctx.stroke();
 
-    for(const c of cones){
-      if(Math.hypot(car.x - c.x, car.y - c.y) < 18){
-        bounceCar(car);
-        addDamage(car, 12000);
-        addFloat("콘 박음", car.x, car.y - 30, "white");
-        break;
-      }
-    }
+    zoneBox(lot.drop, "DROP");
+    zoneBox(lot.pickup, "PICKUP");
+    zoneBox(lot.exit, "EXIT");
 
-    for(const other of cars){
-      if(car === other) continue;
-      if(Math.abs(car.x - other.x) < 65 && Math.abs(car.y - other.y) < 65){
-        if(dist(car, other) < 38){
-          bounceCar(car);
-          addDamage(car, DMG_CAR);
-          addDamage(other, DMG_CAR);
-          break;
-        }
-      }
-    }
-  }
+    for (const s of lot.spots) {
+      ctx.strokeStyle = "rgba(255,255,255,.18)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(s.x, s.y, s.w, s.h);
 
-  // ========= Core update =========
-  function update(dt){
-    dt = Math.min(dt, 40);
-    const ts = dt / 16.66;
-
-    // stage timer
-    stageTimeLeft -= dt/1000;
-    if(stageTimeLeft <= 0){
-      stageTimeLeft = 0;
-      nextStageOrEnd();
-      // nextStageOrEnd에서 endGame될 수 있으니 return
-      if(gameState !== "playing") return;
-    }
-
-    // camera follow
-    let tx = player.x - screenW/2;
-    let ty = player.y - screenH/2;
-    tx = clamp(tx, 0, Math.max(0, MAP_W - screenW));
-    ty = clamp(ty, 0, Math.max(0, MAP_H - screenH));
-    camX += (tx - camX) * 0.12;
-    camY += (ty - camY) * 0.12;
-
-    // walking
-    if(player.state==="walking"){
-      let dx=0, dy=0;
-      if(keys.ArrowUp) dy -= 1;
-      if(keys.ArrowDown) dy += 1;
-      if(keys.ArrowLeft) dx -= 1;
-      if(keys.ArrowRight) dx += 1;
-
-      if(dx!==0 || dy!==0){
-        const len = Math.hypot(dx,dy);
-        player.x += (dx/len)*5.2*ts;
-        player.y += (dy/len)*5.2*ts;
-      }
-      player.x = clamp(player.x, 10, MAP_W-10);
-      player.y = clamp(player.y, 10, MAP_H-10);
-
-      // target car
-      player.targetCar=null;
-      let md=74;
-      for(const c of cars){
-        const d = Math.hypot(player.x - c.x, player.y - c.y);
-        if(d < md && (c.state==="waiting_valet" || c.state==="parked" || c.state==="retrieving")){
-          player.targetCar=c;
-          md=d;
-        }
-      }
-    }
-
-    // driving
-    if(player.state==="driving"){
-      const car = player.targetCar;
-      if(!car){ player.state="walking"; return; }
-
-      // steering
-      if(keys.ArrowLeft) car.steerAngle -= STEER_SPEED*ts;
-      else if(keys.ArrowRight) car.steerAngle += STEER_SPEED*ts;
-      else{
-        if(car.steerAngle > 0) car.steerAngle = Math.max(0, car.steerAngle - STEER_RESTORE*ts);
-        else if(car.steerAngle < 0) car.steerAngle = Math.min(0, car.steerAngle + STEER_RESTORE*ts);
-      }
-      car.steerAngle = clamp(car.steerAngle, -STEER_MAX, STEER_MAX);
-      ui.steeringWheel.style.transform = `rotate(${car.steerAngle*85}deg)`;
-
-      // pedals resolve (PC는 W/S를 gas/brake로 매핑했고, 모바일은 버튼이 gasPressed/brakePressed 세팅)
-      const gas = gasPressed;
-      const brake = brakePressed;
-
-      // gear affects acceleration
-      if(gear === Gear.P){
-        // 강제 정지
-        car.speed *= 0.70;
-        if(Math.abs(car.speed) < 0.05) car.speed = 0;
-      }
-      else if(gear === Gear.N){
-        // 가스 무시, 브레이크만
-        if(brake) car.speed -= Math.sign(car.speed || 1) * BRAKE_POWER*ts; // 멈추기
-        else{
-          if(car.speed > 0) car.speed = Math.max(0, car.speed - FRICTION*ts);
-          else if(car.speed < 0) car.speed = Math.min(0, car.speed + FRICTION*ts);
-        }
-      }
-      else if(gear === Gear.D){
-        if(gas) car.speed += ACCEL*ts;
-        if(brake) car.speed -= BRAKE_POWER*ts;
-        if(!gas && !brake){
-          if(car.speed > 0) car.speed = Math.max(0, car.speed - FRICTION*ts);
-          else if(car.speed < 0) car.speed = Math.min(0, car.speed + FRICTION*ts);
-        }
-      }
-      else if(gear === Gear.R){
-        // 후진: 가스가 음의 방향으로
-        if(gas) car.speed -= ACCEL*ts;
-        if(brake) car.speed += BRAKE_POWER*ts; // 후진에서 브레이크는 “후진 속도를 줄이는 방향”이라 여기선 +로, 아래 clamp가 정리됨
-        if(!gas && !brake){
-          if(car.speed > 0) car.speed = Math.max(0, car.speed - FRICTION*ts);
-          else if(car.speed < 0) car.speed = Math.min(0, car.speed + FRICTION*ts);
-        }
-      }
-
-      // speed clamp (R은 -MAX/1.5까지, D는 MAX까지)
-      car.speed = clamp(car.speed, -MAX_SPEED/1.5, MAX_SPEED);
-
-      // steering rotation only when moving
-      if(Math.abs(car.speed) > 0.12){
-        const dir = car.speed > 0 ? 1 : -1;
-        car.angle += car.steerAngle * (Math.abs(car.speed)/45) * dir * ts;
-      }
-
-      car.x += Math.cos(car.angle)*car.speed*ts;
-      car.y += Math.sin(car.angle)*car.speed*ts;
-
-      player.x = car.x; player.y = car.y;
-
-      checkCarCollisions(car);
-    }
-
-    // cars AI
-    for(let i=cars.length-1;i>=0;i--){
-      const c = cars[i];
-      if(c.state==="arriving"){
-        c.x += 3.0*ts;
-        if(c.x > entrance.x + 35){
-          c.state="waiting_valet";
-          spawnCustomerForCar(c);
-          playSound("honk");
-          say("drop", c.x, c.y - 35);
-        }
-      } else if(c.state==="exiting"){
-        c.x += 6.2*ts;
-        if(c.x > MAP_W + 170){
-          if(c.slot) c.slot.occupiedBy = null;
-          cars.splice(i,1);
-        }
-      }
-    }
-
-    // customers
-    for(const cust of customers){
-      if(!cust.visible && cust.phase!=="done") continue;
-      const car = cust.car;
-
-      if(cust.phase==="drop_walk_booth"){
-        moveTo(cust, booth.x + booth.w/2, booth.y + booth.h/2, 2.2*ts);
-        if(dist(cust,{x:booth.x+booth.w/2,y:booth.y+booth.h/2}) < 10){
-          say("drop", cust.x, cust.y - 26);
-          cust.phase="drop_leave";
-        }
-      }
-      else if(cust.phase==="drop_leave"){
-        moveTo(cust, -60, booth.y + 10, 3.2*ts);
-        if(cust.x < -30){
-          cust.visible=false;
-          cust.phase="drop_done_waiting"; // 주차 대기
-          cust.impatienceAt = Date.now() + 12000 + Math.random()*12000;
-        }
-      }
-      else if(cust.phase==="drop_done_waiting"){
-        if(Date.now() > cust.impatienceAt && car.state !== "parked"){
-          cust.impatienceAt = Date.now() + 12000 + Math.random()*12000;
-          addFloat(SAY.waitBad[Math.floor(Math.random()*SAY.waitBad.length)], car.x, car.y - 60, "#ffffff");
-          playSound("honk");
-        }
-      }
-      else if(cust.phase==="away"){
-        if(Date.now() > cust.returnTime){
-          cust.visible=true;
-          cust.x=-60; cust.y=booth.y + 12;
-          cust.phase="pickup_walk_booth";
-        }
-      }
-      else if(cust.phase==="pickup_walk_booth"){
-        moveTo(cust, booth.x + booth.w/2, booth.y + booth.h/2, 3.0*ts);
-        if(dist(cust,{x:booth.x+booth.w/2,y:booth.y+booth.h/2}) < 10){
-          cust.phase="pickup_request";
-          if(car.state==="parked") car.state="retrieving";
-          say("pickup", cust.x, cust.y - 26);
-        }
-      }
-      else if(cust.phase==="pickup_request"){
-        moveTo(cust, exitZ.x + exitZ.w/2, exitZ.y + exitZ.h/2, 2.2*ts);
-        if(dist(cust,{x:exitZ.x+exitZ.w/2,y:exitZ.y+exitZ.h/2}) < 14){
-          cust.phase="wait_at_exit";
-        }
-      }
-      else if(cust.phase==="wait_at_exit"){
-        if(Math.random() < 0.0015){
-          addFloat(SAY.pickup[Math.floor(Math.random()*SAY.pickup.length)], cust.x, cust.y - 26, "#f6e05e");
-        }
-      }
-    }
-
-    // float texts
-    floatTexts = floatTexts.filter(f=>{
-      f.y -= 0.6*ts;
-      f.life -= 0.02*ts;
-      return f.life > 0;
-    });
-
-    updateUI();
-  }
-
-  // ========= Draw =========
-  function draw(){
-    ctx.fillStyle="#050913";
-    ctx.fillRect(0,0,screenW,screenH);
-
-    ctx.save();
-    ctx.translate(-Math.floor(camX), -Math.floor(camY));
-
-    // asphalt
-    const grad = ctx.createLinearGradient(0,0,0,MAP_H);
-    grad.addColorStop(0,"#2a2f3a");
-    grad.addColorStop(1,"#1e2430");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0,0,MAP_W,MAP_H);
-
-    // walls
-    ctx.fillStyle="#151a25";
-    ctx.fillRect(0,0,MAP_W,18);
-    ctx.fillRect(0,MAP_H-18,MAP_W,18);
-    ctx.fillRect(0,0,18,MAP_H);
-    ctx.fillRect(MAP_W-18,0,18,MAP_H);
-
-    // subtle marking
-    ctx.globalAlpha=0.12;
-    for(let x=90;x<MAP_W;x+=140){
-      ctx.fillStyle="#ffffff";
-      ctx.fillRect(x, 18, 2, MAP_H-36);
-    }
-    ctx.globalAlpha=1;
-
-    // arrows
-    ctx.globalAlpha=0.24;
-    drawArrow(110, entrance.y + entrance.h + 42);
-    drawArrow(MAP_W - 115, exitZ.y + exitZ.h + 42);
-    ctx.globalAlpha=1;
-
-    // zones
-    drawZone(entrance, "#1d4ed8");
-    drawZone(exitZ, "#16a34a");
-    drawZone(booth, "#d97706");
-
-    // bumps
-    for(const b of speedBumps){
-      ctx.fillStyle="rgba(255,255,255,0.18)";
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-      ctx.fillStyle="rgba(0,0,0,0.25)";
-      ctx.fillRect(b.x, b.y + b.h, b.w, 4);
-    }
-
-    // slots (1줄)
-    for(const s of slots){
-      ctx.fillStyle="rgba(255,255,255,0.05)";
-      ctx.fillRect(s.x, s.y, s.w, s.h);
-
-      ctx.strokeStyle="rgba(255,255,255,0.34)";
-      ctx.lineWidth=2;
+      ctx.strokeStyle = "rgba(255,255,255,.10)";
       ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(s.x, s.y + s.h);
-      ctx.moveTo(s.x + s.w, s.y);
-      ctx.lineTo(s.x + s.w, s.y + s.h);
-      ctx.moveTo(s.x, s.y + s.h);
-      ctx.lineTo(s.x + s.w, s.y + s.h);
+      ctx.moveTo(s.x, s.y + s.h * 0.55);
+      ctx.lineTo(s.x + s.w, s.y + s.h * 0.55);
       ctx.stroke();
 
-      ctx.fillStyle="rgba(255,255,255,0.26)";
-      ctx.font='900 12px "Noto Sans KR"';
-      ctx.textAlign="center";
-      ctx.fillText("P", s.x + s.w/2, s.y + s.h/2 + 4);
-    }
-
-    // pillars
-    for(const p of pillars){
-      ctx.fillStyle="#7b8598";
-      ctx.fillRect(p.x,p.y,p.w,p.h);
-      ctx.fillStyle="#cbd5e0";
-      ctx.fillRect(p.x,p.y-4,p.w,4);
-      ctx.fillStyle="#4b5563";
-      ctx.fillRect(p.x+p.w,p.y,2,p.h);
-      ctx.fillStyle="#f6ad55";
-      ctx.fillRect(p.x,p.y+p.h/2-2,p.w,4);
-    }
-
-    // cones
-    for(const c of cones){
-      ctx.fillStyle="#f97316";
-      ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle="rgba(255,255,255,0.7)";
-      ctx.beginPath(); ctx.arc(c.x,c.y-3,3,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle="rgba(0,0,0,0.3)";
-      ctx.beginPath(); ctx.ellipse(c.x,c.y+9,10,4,0,0,Math.PI*2); ctx.fill();
-    }
-
-    // cars
-    for(const c of cars) drawCar(c);
-
-    // customers
-    for(const cu of customers){
-      if(!cu.visible) continue;
-      ctx.fillStyle="#f6e05e";
-      ctx.beginPath(); ctx.arc(cu.x, cu.y, 8, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle="#0b1220";
-      ctx.font='900 10px "Noto Sans KR"';
-      ctx.textAlign="center";
-      const tag = (cu.phase.startsWith("drop")) ? "키" : (cu.phase.includes("exit") ? "대기" : "손님");
-      ctx.fillText(tag, cu.x, cu.y-10);
-    }
-
-    // player
-    if(player.state==="walking"){
-      ctx.shadowColor="rgba(0,0,0,0.55)";
-      ctx.shadowBlur=8;
-      ctx.fillStyle="#60a5fa";
-      ctx.beginPath(); ctx.arc(player.x,player.y,10,0,Math.PI*2); ctx.fill();
-      ctx.shadowBlur=0;
-
-      ctx.fillStyle="white";
-      ctx.font='900 10px "Noto Sans KR"';
-      ctx.textAlign="center";
-      ctx.fillText("나", player.x, player.y-14);
-
-      if(player.targetCar){
-        ctx.strokeStyle="rgba(255,255,255,0.55)";
-        ctx.lineWidth=2;
-        ctx.beginPath(); ctx.arc(player.x,player.y,26,0,Math.PI*2); ctx.stroke();
+      if (s.occupiedBy !== null) {
+        ctx.fillStyle = "rgba(255,255,255,.04)";
+        ctx.fillRect(s.x, s.y, s.w, s.h);
       }
     }
 
-    // float
-    for(const f of floatTexts){
-      ctx.fillStyle=f.c;
-      ctx.font='900 16px "Noto Sans KR"';
-      ctx.strokeStyle="rgba(0,0,0,0.65)";
-      ctx.lineWidth=4;
-      ctx.strokeText(f.text, f.x, f.y);
-      ctx.fillText(f.text, f.x, f.y);
+    for (const o of lot.obstacles) {
+      ctx.fillStyle = "rgba(255,255,255,.08)";
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.strokeStyle = "rgba(255,255,255,.14)";
+      ctx.strokeRect(o.x, o.y, o.w, o.h);
+    }
+  }
+
+  function zoneBox(z, label) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(96,165,250,.18)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.strokeRect(z.x, z.y, z.w, z.h);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = "rgba(255,255,255,.55)";
+    ctx.font = "12px system-ui, -apple-system, Noto Sans KR, sans-serif";
+    ctx.fillText(label, z.x + 8, z.y + 16);
+    ctx.restore();
+  }
+
+  function drawEntities() {
+    for (const c of state.cars) {
+      drawCar(c);
+      if (c.state === "WAIT_DROP") drawBubble(c.x, c.y - 38, c.bubble);
+      if (c.state === "PARKED" && c.pickupRequested) drawBubble(c.x, c.y - 38, "픽업!");
+      if (c.state === "PICKUP" && player.inCarId === c.id) drawBubble(c.x, c.y - 38, "픽업존!");
     }
 
-    ctx.restore();
+    if (player.inCarId === null) {
+      ctx.fillStyle = "rgba(255,255,255,.88)";
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(96,165,250,.95)";
+      ctx.beginPath();
+      ctx.arc(player.x + 6, player.y - 6, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
-  function drawArrow(x,y){
-    ctx.save();
-    ctx.translate(x,y);
-    ctx.fillStyle="#ffffff";
-    ctx.beginPath();
-    ctx.moveTo(0,-14);
-    ctx.lineTo(18,10);
-    ctx.lineTo(6,10);
-    ctx.lineTo(6,26);
-    ctx.lineTo(-6,26);
-    ctx.lineTo(-6,10);
-    ctx.lineTo(-18,10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawZone(z,color){
-    ctx.fillStyle=color;
-    ctx.globalAlpha=0.86;
-    ctx.fillRect(z.x,z.y,z.w,z.h);
-    ctx.globalAlpha=1;
-
-    ctx.strokeStyle="rgba(255,255,255,0.50)";
-    ctx.lineWidth=2;
-    ctx.strokeRect(z.x,z.y,z.w,z.h);
-
-    ctx.fillStyle="rgba(0,0,0,0.35)";
-    ctx.fillRect(z.x,z.y,z.w,26);
-
-    ctx.fillStyle="#ffffff";
-    ctx.font='900 16px "Black Han Sans"';
-    ctx.textAlign="center";
-    ctx.fillText(z.label, z.x+z.w/2, z.y+20);
-  }
-
-  function drawCar(c){
+  function drawCar(c) {
     ctx.save();
     ctx.translate(c.x, c.y);
-    ctx.rotate(c.angle + Math.PI/2);
+    ctx.rotate(c.a);
 
-    // shadow
-    ctx.fillStyle="rgba(0,0,0,0.26)";
-    ctx.fillRect(-c.w/2+4, -c.h/2+6, c.w, c.h);
+    ctx.fillStyle = c.color;
+    roundRect(ctx, -c.w / 2, -c.h / 2, c.w, c.h, 8);
+    ctx.fill();
 
-    // wheels
-    ctx.fillStyle="#0b1220";
-    ctx.save(); ctx.translate(-c.w/2, -c.h/3); ctx.rotate(c.steerAngle); ctx.fillRect(-3,-6,6,12); ctx.restore();
-    ctx.save(); ctx.translate( c.w/2, -c.h/3); ctx.rotate(c.steerAngle); ctx.fillRect(-3,-6,6,12); ctx.restore();
-    ctx.fillRect(-c.w/2-3, c.h/3-6, 6,12);
-    ctx.fillRect( c.w/2-3, c.h/3-6, 6,12);
+    ctx.fillStyle = "rgba(0,0,0,.35)";
+    roundRect(ctx, -c.w / 2 + 4, -c.h / 2 + 6, c.w - 8, 14, 6);
+    ctx.fill();
 
-    // body
-    ctx.fillStyle=c.type.body;
-    ctx.roundRect(-c.w/2, -c.h/2, c.w, c.h, 7); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,.22)";
+    roundRect(ctx, -c.w / 2 + 4, c.h / 2 - 20, c.w - 8, 14, 6);
+    ctx.fill();
 
-    // stripe
-    ctx.fillStyle=c.type.stripe;
-    ctx.globalAlpha=0.85;
-    ctx.fillRect(-c.w/2, -c.h/2 + 10, c.w, 10);
-    ctx.globalAlpha=1;
-
-    // glass
-    ctx.fillStyle=c.type.glass;
-    ctx.globalAlpha=0.92;
-    ctx.roundRect(-c.w/2+3, -c.h/4, c.w-6, c.h/4, 2); ctx.fill();
-    ctx.roundRect(-c.w/2+3, c.h/7, c.w-6, c.h/5, 2); ctx.fill();
-    ctx.globalAlpha=1;
-
-    // headlights
-    ctx.fillStyle = (Math.abs(c.speed)>0.1 || c.state==="waiting_valet" || c.driver==="player") ? "#fff07a" : "#4b5563";
-    ctx.shadowColor="#fff07a";
-    ctx.shadowBlur=(c.driver==="player")?10:0;
-    ctx.fillRect(-c.w/2+2, -c.h/2, 6,4);
-    ctx.fillRect( c.w/2-8, -c.h/2, 6,4);
-    ctx.shadowBlur=0;
-
-    // brake lights (브레이크 밟을 때만)
-    if(brakePressed && c.driver==="player" && Math.abs(c.speed) > 0.1){
-      ctx.fillStyle="#ff3b3b"; ctx.shadowColor="#ff3b3b"; ctx.shadowBlur=10;
-    } else ctx.fillStyle="#4a0f0f";
-    ctx.fillRect(-c.w/2+2, c.h/2-4, 6,4);
-    ctx.fillRect( c.w/2-8, c.h/2-4, 6,4);
-    ctx.shadowBlur=0;
-
-    // scratch
-    if(c.scratch>0){
-      ctx.strokeStyle="rgba(255,255,255,0.92)";
-      ctx.lineWidth=2;
-      ctx.beginPath();
-      ctx.moveTo(-10,-10); ctx.lineTo(10,10);
-      ctx.moveTo(10,-10); ctx.lineTo(-10,10);
+    if (player.inCarId === c.id) {
+      ctx.strokeStyle = "rgba(255,255,255,.85)";
+      ctx.lineWidth = 2;
+      roundRect(ctx, -c.w / 2 - 2, -c.h / 2 - 2, c.w + 4, c.h + 4, 10);
       ctx.stroke();
     }
-
     ctx.restore();
-
-    if(c.state==="retrieving"){
-      ctx.fillStyle="#ff5a5a";
-      ctx.font="24px serif";
-      ctx.textAlign="center";
-      ctx.fillText("❗", c.x, c.y-35);
-    }
   }
 
-  // ========= Loop =========
-  function loop(t){
-    if(gameState!=="playing") return;
-    const dt = t - lastTime;
-    lastTime = t;
-    update(dt);
-    draw();
-    raf = requestAnimationFrame(loop);
+  function drawBubble(x, y, text) {
+    ctx.save();
+    ctx.font = "12px system-ui, -apple-system, Noto Sans KR, sans-serif";
+    const pad = 8;
+    const w = ctx.measureText(text).width + pad * 2;
+    const h = 22;
+
+    ctx.fillStyle = "rgba(18,25,40,.85)";
+    ctx.strokeStyle = "rgba(255,255,255,.12)";
+    roundRect(ctx, x - w / 2, y - h, w, h, 10);
+    ctx.fill();
+    roundRect(ctx, x - w / 2, y - h, w, h, 10);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255,255,255,.88)";
+    ctx.fillText(text, x - w / 2 + pad, y - 7);
+    ctx.restore();
   }
 
-  // ========= Game flow =========
-  function resetGame(){
-    money=0; debt=0;
-    cars=[]; customers=[]; floatTexts=[];
-    camX=0; camY=0;
-
-    initMap();
-
-    player.state="walking";
-    player.targetCar=null;
-    player.x = booth.x + booth.w/2;
-    player.y = booth.y + booth.h + 28;
-
-    setGear(Gear.P);
-    applyStage(0);
-
-    updateUI();
+  function roundRect(ctx, x, y, w, h, r) {
+    const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+    ctx.closePath();
   }
 
-  function startGame(){
-    ensureAudio();
-    gameState="playing";
-    ui.startScreen.classList.add("hidden");
-    ui.endScreen.classList.add("hidden");
-
-    ui.walkControls.style.display="block";
-    ui.driveControls.style.display="none";
-    ui.btnMain.textContent="탑승";
-    ui.btnSub.textContent="Space";
-
-    resetGame();
-
-    setTimeout(spawnCar, 900);
-
-    lastTime = performance.now();
-    if(raf) cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(loop);
-  }
-
-  function endGame(reason){
-    gameState="over";
-    if(raf) cancelAnimationFrame(raf);
-    raf=null;
-
-    ui.endScreen.classList.remove("hidden");
-    ui.endReason.textContent = reason;
-    ui.finalScore.textContent = fmtMoney(money - debt);
-  }
-
-  // ========= Controls (PC + Mobile) =========
-  function clearKeys(){
-    for(const k in keys) keys[k]=false;
-    gasPressed=false; brakePressed=false;
-    document.querySelectorAll(".active").forEach(el=>el.classList.remove("active"));
-  }
-
-  function bindDpadButtons(){
-    const nodes = document.querySelectorAll(".d-btn, .steer-touch-left, .steer-touch-right");
-    nodes.forEach(el=>{
-      const k = el.getAttribute("data-key");
-      const start = (e)=>{ e.preventDefault(); ensureAudio(); keys[k]=true; el.classList.add("active"); };
-      const end = (e)=>{ e.preventDefault(); keys[k]=false; el.classList.remove("active"); };
-
-      el.addEventListener("pointerdown", start, {passive:false});
-      el.addEventListener("pointerup", end, {passive:false});
-      el.addEventListener("pointercancel", end, {passive:false});
-      el.addEventListener("pointerleave", end, {passive:false});
-    });
-  }
-
-  function bindPedals(){
-    const brakeBtn = document.getElementById("brakeBtn");
-    const gasBtn = document.getElementById("gasBtn");
-
-    const mk = (btn, setter) => {
-      const start = (e)=>{ e.preventDefault(); ensureAudio(); setter(true); btn.classList.add("active"); };
-      const end   = (e)=>{ e.preventDefault(); setter(false); btn.classList.remove("active"); };
-
-      btn.addEventListener("pointerdown", start, {passive:false});
-      btn.addEventListener("pointerup", end, {passive:false});
-      btn.addEventListener("pointercancel", end, {passive:false});
-      btn.addEventListener("pointerleave", end, {passive:false});
-    };
-
-    mk(brakeBtn, (v)=>{ brakePressed=v; });
-    mk(gasBtn, (v)=>{ gasPressed=v; });
-  }
-
-  function bindGearButtons(){
-    document.querySelectorAll(".gearBtn").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        ensureAudio();
-        setGear(btn.getAttribute("data-gear"));
-      });
-    });
-  }
-
-  // PC 키보드 매핑:
-  // 이동(걷기): WASD/방향키
-  // 운전: A/D 핸들, W=가스, S=브레이크
-  // 기어: 1=P, 2=R, 3=N, 4=D
-  window.addEventListener("keydown", (e)=>{
-    ensureAudio();
-    const code = e.code;
-
-    // prevent scroll
-    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(code)) e.preventDefault();
-
-    // gear hotkeys
-    if(code==="Digit1") setGear(Gear.P);
-    if(code==="Digit2") setGear(Gear.R);
-    if(code==="Digit3") setGear(Gear.N);
-    if(code==="Digit4") setGear(Gear.D);
-
-    // walking/steering keys
-    if(code==="ArrowUp" || code==="KeyW") keys.ArrowUp = true;
-    if(code==="ArrowDown" || code==="KeyS") keys.ArrowDown = true;
-    if(code==="ArrowLeft" || code==="KeyA") keys.ArrowLeft = true;
-    if(code==="ArrowRight" || code==="KeyD") keys.ArrowRight = true;
-
-    // pedals on PC:
-    // W gas, S brake  (걷기에서는 그냥 이동키로 사용되지만 운전중엔 pedalPressed를 같이 봄)
-    if(code==="KeyW") gasPressed = true;
-    if(code==="KeyS") brakePressed = true;
-
-    if(code==="Space") handleAction();
-  }, {passive:false});
-
-  window.addEventListener("keyup", (e)=>{
-    const code = e.code;
-    if(code==="ArrowUp" || code==="KeyW") keys.ArrowUp = false;
-    if(code==="ArrowDown" || code==="KeyS") keys.ArrowDown = false;
-    if(code==="ArrowLeft" || code==="KeyA") keys.ArrowLeft = false;
-    if(code==="ArrowRight" || code==="KeyD
+  setHint("[영업 시작]을 눌러 시작", 0);
+  showControls();
+})();
