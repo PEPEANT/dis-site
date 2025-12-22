@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DICE CITY V11 (Safe Restore)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 기본 설정 */
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; background-color: #f1f5f9; touch-action: manipulation; -webkit-tap-highlight-color: transparent; padding-bottom: 110px; user-select: none; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 애니메이션 */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* 뉴스 티커 */
+        .marquee-container { overflow: hidden; white-space: nowrap; position: relative; mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); }
+        .marquee-content { display: inline-block; padding-left: 100%; animation: marquee 30s linear infinite; }
+        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+        
+        /* 기타 효과 */
+        .click-effect { position: absolute; animation: floatUp 1s forwards; pointer-events: none; font-weight: bold; color: #10b981; z-index: 100; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-30px); } }
+        .modal-backdrop { background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+        .main-bg { background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); }
+        
+        /* AI 로딩 효과 */
+        .ai-loading { animation: pulse-glow 1.5s infinite; }
+        @keyframes pulse-glow { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+
+        /* 텍스트 선택 허용 (저장 코드용) */
+        .allow-select { user-select: text !important; -webkit-user-select: text !important; }
+    </style>
+</head>
+<body class="text-gray-800 h-screen overflow-hidden">
+
+    <!-- 오디오 요소 -->
+    <audio id="bgm-player" loop>
+        <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3" type="audio/mp3">
+    </audio>
+
+    <!-- 1. 메인 시작 화면 -->
+    <div id="main-screen" class="fixed inset-0 z-[100] main-bg flex flex-col items-center justify-center text-white p-6 transition-opacity duration-500">
+        <div class="text-center space-y-6 animate-[fadeIn_0.5s_ease-out]">
+            <div class="space-y-2">
+                <span class="inline-block px-3 py-1 rounded-full bg-green-500/20 text-green-300 text-xs font-bold border border-green-500/50">Safe Mode ✅</span>
+                <h1 class="text-5xl font-black tracking-tighter bg-gradient-to-br from-white to-gray-400 bg-clip-text text-transparent drop-shadow-xl">DICE CITY<br><span class="text-2xl text-indigo-400">V11</span></h1>
+            </div>
+            
+            <p class="text-gray-400 text-sm max-w-xs mx-auto leading-relaxed">
+                다이스시티에 오신것을 환영합니다<br>
+            </p>
+
+            <div class="flex flex-col gap-3 w-full max-w-[240px] mx-auto pt-4">
+                <button onclick="startGame()" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-900/50 active:scale-95 transition text-lg">
+                    GAME START
+                </button>
+                <button onclick="openLoadGameModal()" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-gray-300 font-bold rounded-xl shadow-lg active:scale-95 transition text-sm">
+                    📂 현금 데이터 복구
+                </button>
+            </div>
+        </div>
+        <div class="absolute bottom-6 text-xs text-gray-600">ver 11.0.0 | Cash Only Restore</div>
+    </div>
+
+    <!-- 3. 게임 화면 -->
+    <div id="game-screen" class="hidden h-full overflow-y-auto hide-scrollbar">
+        
+        <!-- 상단 정보바 -->
+        <header class="sticky top-0 z-50 bg-white/90 backdrop-blur shadow-sm border-b border-gray-200 px-4 py-3">
+            <div class="max-w-3xl mx-auto">
+                <div class="flex justify-between items-center mb-2">
+                    <div class="flex items-center gap-2">
+                        <button onclick="toggleBGM()" id="bgm-btn" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 transition">
+                            🔇
+                        </button>
+                        <span class="text-xl transition-all duration-300" id="header-logo">🥣</span>
+                        <div>
+                            <div id="player-rank" class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full inline-block">노숙자</div>
+                            <h1 class="font-black text-gray-800 leading-none">DICE CITY</h1>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-gray-500">총 자산</div>
+                        <div id="header-total-asset" class="text-lg font-black text-gray-900">0원</div>
+                    </div>
+                </div>
+                <!-- 현금 바 -->
+                <div class="bg-gray-100 rounded-full h-6 flex items-center px-3 relative overflow-hidden">
+                    <div class="text-[10px] text-gray-500 mr-2">현금</div>
+                    <div id="header-cash" class="font-bold text-sm text-green-700">0원</div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-3xl mx-auto p-4 space-y-5 pb-24">
+
+            <!-- 1. 내 정보 탭 -->
+            <div id="tab-myinfo" class="tab-content active space-y-5">
+                <!-- 긴급 알바 -->
+                <div id="emergency-job"
+                     class="hidden bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm active:scale-[0.99] transition-transform select-none"
+                     onclick="doPartTimeJob(event)">
+                  <h3 class="font-bold text-indigo-700 text-lg pointer-events-none">💸 긴급 알바하기</h3>
+                  <p class="text-xs text-gray-500 pointer-events-none">터치하여 시드머니 모으기 (+135,000원)</p>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100">
+                    <div class="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 text-white">
+                        <div class="flex items-center gap-4">
+                            <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl border-2 border-white/30 transition-all duration-300" id="my-avatar">🥣</div>
+                            <div>
+                                <div class="text-xs text-indigo-200 font-bold uppercase tracking-wider">Identity</div>
+                                <h2 class="text-2xl font-black">플레이어</h2>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span id="my-rank-badge" class="px-2 py-0.5 bg-white/20 rounded text-xs font-bold backdrop-blur-sm">노숙자</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <div class="text-xs text-gray-400 font-bold">Relationship</div>
+                                <div class="text-xl font-black text-gray-800" id="relationship-status">모태솔로</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-gray-400 font-bold">Net Worth</div>
+                                <div id="my-networth" class="text-xl font-black text-indigo-600">0원</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 mb-6">
+                            <button onclick="goForWalk()" class="py-4 bg-pink-50 hover:bg-pink-100 text-pink-600 rounded-2xl font-bold transition border border-pink-100 flex flex-col items-center justify-center gap-1 group">
+                                <span class="text-2xl group-hover:scale-110 transition">🌸</span>
+                                <span>헌팅하기</span>
+                            </button>
+                            <button onclick="goHome()" class="py-4 bg-green-50 hover:bg-green-100 text-green-600 rounded-2xl font-bold transition border border-green-100 flex flex-col items-center justify-center gap-1 group">
+                                <span class="text-2xl group-hover:scale-110 transition">🏠</span>
+                                <span>집에 가기</span>
+                            </button>
+                        </div>
+                        <div class="space-y-2 text-sm bg-gray-50 p-4 rounded-xl mb-4">
+                            <div class="flex justify-between"><span class="text-gray-500">현금</span><span id="info-cash" class="font-bold">0원</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">주식/코인</span><span id="info-invest" class="font-bold">0원</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">부동산/명품</span><span id="info-asset" class="font-bold">0원</span></div>
+                        </div>
+
+                        <!-- V11 데이터 백업 센터 -->
+                        <div class="bg-slate-800 rounded-xl p-4 text-white">
+                            <h3 class="text-sm font-bold mb-1 flex items-center gap-2">💾 데이터 백업 센터 <span class="text-[10px] font-normal text-green-400 bg-green-900/50 px-1.5 py-0.5 rounded border border-green-800">안전 모드</span></h3>
+                            <p class="text-xs text-slate-400 mb-3">오류 방지를 위해 현금(Cash) 데이터만 저장/복구합니다.</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="exportSaveData()" class="bg-blue-500 hover:bg-blue-600 text-white text-xs py-2.5 rounded-lg font-bold active:scale-95 transition shadow-md">
+                                    📤 저장 코드 복사
+                                </button>
+                                <button onclick="openLoadGameModal()" class="bg-slate-600 hover:bg-slate-500 text-white text-xs py-2.5 rounded-lg font-bold active:scale-95 transition shadow-md border border-slate-500">
+                                    📥 현금 복구
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 mb-3 text-sm flex items-center gap-2">
+                        <span>💕 인연 목록</span>
+                        <span class="text-xs text-gray-400 font-normal">100% 달성 시 연인 등극</span>
+                    </h3>
+                    <div id="partner-list" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- 2. 뉴스 탭 -->
+            <div id="tab-news" class="tab-content space-y-4">
+                <div class="bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex justify-between items-center">
+                    <div>
+                        <h2 class="text-xl font-bold">📡 Global News</h2>
+                        <p class="text-xs text-slate-400 mt-1">시장 사이클을 파악하세요.</p>
+                    </div>
+                    <button onclick="generateAINews()" id="btn-ai-news" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg active:scale-95 transition flex items-center gap-1">
+                        <span>✨ AI 특파원</span>
+                    </button>
+                </div>
+                <div id="news-locked" class="hidden flex flex-col items-center justify-center bg-gray-200 h-64 rounded-2xl border-2 border-dashed border-gray-400">
+                    <div class="text-5xl mb-3 grayscale">📵</div>
+                    <h3 class="font-bold text-gray-600">접근 불가</h3>
+                    <p class="text-sm text-gray-500">휴대폰을 구매하세요.</p>
+                </div>
+                <div id="news-list-container" class="space-y-3"></div>
+            </div>
+
+            <!-- 3. 주식 탭 -->
+            <div id="tab-stock" class="tab-content space-y-5">
+                <div id="stock-ticker-area" class="bg-white rounded-lg h-10 flex items-center overflow-hidden shadow-sm border"></div>
+                <section class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                    <div class="flex justify-between items-end mb-4">
+                        <div>
+                            <div class="text-[10px] text-gray-400 font-bold uppercase">Market Cycle</div>
+                            <div id="market-cycle" class="text-2xl font-black transition-colors duration-500">Neutral</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] text-gray-400 font-bold uppercase">NASDAQ</div>
+                            <div id="nasdaq-price" class="text-xl font-mono font-bold">0</div>
+                        </div>
+                    </div>
+                    <div class="h-32 flex items-end gap-1" id="nasdaq-chart"></div>
+                </section>
+                <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                    <div class="bg-gray-50 px-5 py-3 border-b font-bold text-sm">📁 포트폴리오</div>
+                    <div id="my-portfolio-list" class="p-2 space-y-1"></div>
+                </section>
+                <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                    <div class="px-5 py-3 border-b bg-indigo-50/50 font-bold text-sm text-indigo-800">📉 거래소</div>
+                    <table class="w-full text-sm"><tbody id="stock-list" class="divide-y divide-gray-100"></tbody></table>
+                </section>
+            </div>
+
+            <!-- 4. 선물 탭 -->
+            <div id="tab-futures" class="tab-content space-y-5">
+                <div id="futures-ticker-area" class="bg-slate-900 text-white rounded-lg h-10 flex items-center overflow-hidden"></div>
+                <div class="bg-white p-5 rounded-2xl border shadow-sm space-y-4">
+                    <div class="flex bg-gray-100 p-1 rounded-xl">
+                        <button onclick="selectCrypto('BTC')" id="btn-btc" class="flex-1 py-2 rounded-lg font-bold text-sm">BTC</button>
+                        <button onclick="selectCrypto('ETH')" id="btn-eth" class="flex-1 py-2 rounded-lg font-bold text-sm">ETH</button>
+                    </div>
+                    <div class="text-center py-2">
+                        <div id="crypto-price-display" class="text-2xl font-mono font-black text-gray-800">0.00</div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-2 font-bold text-gray-600">
+                            <span>레버리지 <span id="leverage-val" class="text-indigo-600">x1</span></span>
+                        </div>
+                        <input type="range" min="1" max="50" value="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" id="leverage-slider" oninput="updateLeverageUI(this.value)">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-xs text-gray-500 font-bold ml-1">증거금 설정</label>
+                        <input type="number" id="futures-margin" class="w-full border-b-2 border-gray-200 text-center text-xl font-bold text-gray-800 focus:border-indigo-500 outline-none py-2" placeholder="0">
+                        <div class="grid grid-cols-4 gap-2">
+                            <button onclick="setFuturesMarginPercent(0.1)" class="text-xs bg-gray-100 hover:bg-gray-200 py-2 rounded-lg font-bold text-gray-600">10%</button>
+                            <button onclick="setFuturesMarginPercent(0.25)" class="text-xs bg-gray-100 hover:bg-gray-200 py-2 rounded-lg font-bold text-gray-600">25%</button>
+                            <button onclick="setFuturesMarginPercent(0.5)" class="text-xs bg-gray-100 hover:bg-gray-200 py-2 rounded-lg font-bold text-gray-600">50%</button>
+                            <button onclick="setFuturesMarginPercent(1.0)" class="text-xs bg-indigo-100 text-indigo-600 hover:bg-indigo-200 py-2 rounded-lg font-bold">MAX</button>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="openPosition('long')" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold shadow-md active:scale-95 transition">LONG</button>
+                        <button onclick="openPosition('short')" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold shadow-md active:scale-95 transition">SHORT</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl border overflow-hidden">
+                    <div class="bg-gray-50 px-5 py-3 border-b text-xs font-bold text-gray-500 uppercase">Positions</div>
+                    <div id="futures-positions" class="divide-y divide-gray-100"></div>
+                </div>
+            </div>
+
+            <!-- 5. 자산 탭 (부동산) -->
+            <div id="tab-realestate" class="tab-content space-y-5">
+                <div class="bg-gradient-to-r from-emerald-500 to-teal-600 text-white p-6 rounded-2xl shadow-lg flex justify-between items-center">
+                    <div><h2 class="font-bold text-xl">Real Estate</h2><p class="text-xs text-emerald-100 mt-1">월세 수익 자산</p></div>
+                    <div class="text-right"><div class="text-xs text-emerald-100">월세 (10초)</div><div id="total-rent" class="text-2xl font-black">+0원</div></div>
+                </div>
+                <div id="realestate-list" class="grid grid-cols-1 gap-4"></div>
+            </div>
+
+            <!-- 6. 카지노 탭 -->
+            <div id="tab-casino" class="tab-content space-y-5">
+                <div class="bg-gradient-to-br from-slate-800 to-slate-900 text-white p-6 rounded-2xl shadow-lg border border-slate-700">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="text-xs text-gray-400">내 보유 자산</div>
+                        <div id="casino-my-cash" class="text-xl font-bold text-emerald-400">0원</div>
+                    </div>
+                    <div class="h-px bg-slate-700 my-2"></div>
+                    <div class="flex justify-between items-center mt-2">
+                        <div class="text-xs text-indigo-300 font-bold uppercase tracking-wider">BETTING CHIP</div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">🪙</span>
+                            <span id="casino-bet-display" class="text-3xl font-black text-yellow-400">0</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border shadow-sm space-y-4">
+                    <div>
+                        <input type="number" id="bet-amount" class="w-full border-b-2 border-gray-200 text-center text-2xl font-bold py-2" placeholder="배팅금 설정" oninput="updateCasinoBetDisplay(this.value)">
+                        <div class="grid grid-cols-4 gap-2 mt-2">
+                            <button onclick="setBetPercent(0.1)" class="bg-gray-50 py-2 rounded text-xs font-bold">10%</button>
+                            <button onclick="setBetPercent(0.25)" class="bg-gray-50 py-2 rounded text-xs font-bold">25%</button>
+                            <button onclick="setBetPercent(0.5)" class="bg-gray-50 py-2 rounded text-xs font-bold">50%</button>
+                            <button onclick="setBetPercent(1.0)" class="bg-indigo-50 text-indigo-600 py-2 rounded text-xs font-bold">ALL</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex p-1 bg-gray-200 rounded-xl">
+                    <button onclick="setCasinoGame('oddeven')" id="btn-game-oddeven" class="flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-white shadow-sm">홀짝 (인생 한방)</button>
+                    <button onclick="setCasinoGame('blackjack')" id="btn-game-blackjack" class="flex-1 py-2 rounded-lg text-sm font-bold text-gray-500 transition-all">블랙잭 (승부사)</button>
+                </div>
+                
+                <div id="game-oddeven" class="bg-white p-6 rounded-2xl border text-center shadow-sm min-h-[300px] flex flex-col justify-center">
+                    <div id="oddeven-status" class="h-12 mb-4 font-bold text-gray-400 text-lg flex items-center justify-center">
+                        선택하세요
+                    </div>
+                    <div class="flex gap-4 justify-center mb-6">
+                        <button id="btn-odd" onclick="playOddEven('odd')" class="w-28 h-28 rounded-full bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white font-bold text-2xl shadow-lg transition-all flex flex-col items-center justify-center gap-1">
+                            <span>홀</span><span class="text-xs font-normal opacity-70">Odd</span>
+                        </button>
+                        <button id="btn-even" onclick="playOddEven('even')" class="w-28 h-28 rounded-full bg-pink-500 hover:bg-pink-600 active:scale-95 text-white font-bold text-2xl shadow-lg transition-all flex flex-col items-center justify-center gap-1">
+                            <span>짝</span><span class="text-xs font-normal opacity-70">Even</span>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400">연속 성공 시 배율: 2배 ➔ 5배 ➔ 12배</p>
+                </div>
+
+                <div id="game-blackjack" class="hidden bg-[#2F5233] p-6 rounded-2xl border-4 border-[#4a3b22] relative shadow-2xl min-h-[360px] text-white flex flex-col justify-between">
+                     <div class="text-center">
+                        <div class="inline-block bg-black/30 px-3 py-1 rounded-full text-xs text-green-200 mb-2 border border-white/10">딜러 (Dealer)</div>
+                        <div id="bj-dealer-cards" class="flex justify-center h-16 items-center text-3xl gap-2 drop-shadow-md min-h-[64px]"></div>
+                        <div id="bj-dealer-score" class="text-sm font-bold text-yellow-400 min-h-[20px] mt-1 opacity-0 transition-opacity duration-500">0</div>
+                    </div>
+                    <div class="text-center my-4"><div class="text-xs text-gray-400 tracking-widest">VS</div></div>
+                    <div class="text-center">
+                         <div id="bj-player-score" class="text-sm font-bold text-yellow-400 min-h-[20px] mb-1">0</div>
+                        <div id="bj-player-cards" class="flex justify-center h-16 items-center text-3xl gap-2 drop-shadow-md min-h-[64px]"></div>
+                         <div class="inline-block bg-black/30 px-3 py-1 rounded-full text-xs text-green-200 mt-2 border border-white/10">나 (Player)</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button onclick="startBlackjack()" id="btn-bj-deal" class="col-span-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black py-4 rounded-xl shadow-lg text-lg active:scale-95 transition">게임 시작 (DEAL)</button>
+                        <button onclick="hitBlackjack()" id="btn-bj-hit" class="hidden bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold shadow-lg border-b-4 border-blue-800 active:border-0 active:translate-y-1 transition text-lg">카드 받기</button>
+                        <button onclick="standBlackjack()" id="btn-bj-stand" class="hidden bg-red-600 hover:bg-red-500 py-4 rounded-xl font-bold shadow-lg border-b-4 border-red-800 active:border-0 active:translate-y-1 transition text-lg">멈추기</button>
+                    </div>
+                    <div id="bj-result" class="hidden absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-xl animate-[fadeIn_0.2s]">
+                         <div id="bj-result-emoji" class="text-6xl mb-4 animate-bounce">🎉</div>
+                         <div id="bj-result-text" class="text-4xl font-black mb-6 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">WIN</div>
+                         <button onclick="resetBlackjackUI()" class="bg-white hover:bg-gray-100 text-black px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition">한 판 더!</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7. 상점 탭 -->
+            <div id="tab-shop" class="tab-content space-y-5">
+                <div>
+                    <h3 class="text-xs font-bold text-gray-500 uppercase mb-2 ml-1">Essential Items (필수 / 1회 구매)</h3>
+                    <div id="shop-essential-list" class="grid grid-cols-1 gap-3"></div>
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-gray-500 uppercase mb-2 ml-1">Luxury Assets (명품 / 가치 보존)</h3>
+                    <div id="shop-asset-list" class="grid grid-cols-1 gap-3"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 하단 네비게이션 -->
+        <nav class="fixed bottom-0 w-full bg-white border-t border-gray-200 pb-safe z-50 overflow-x-auto hide-scrollbar">
+            <div class="flex min-w-full px-1">
+                <button onclick="switchTab('myinfo')" class="nav-item flex-1 min-w-[60px] py-2 text-center text-indigo-600 bg-indigo-50/50 font-bold rounded-lg mt-1" id="nav-myinfo">👤<br><span class="text-[10px]">내정보</span></button>
+                <button onclick="switchTab('news')" class="nav-item flex-1 min-w-[60px] py-2 text-center text-gray-400 rounded-lg mt-1" id="nav-news">📰<br><span class="text-[10px]">뉴스</span></button>
+                <button onclick="switchTab('stock')" class="nav-item flex-1 min-w-[60px] py-2 text-center text-gray-400 rounded-lg mt-1" id="nav-stock">📈<br><span class="text-[10px]">주식</span></button>
+                <button onclick="switchTab('futures')" class="nav-item flex-1 min-w-[60px] py-2 text-center text-gray-400 rounded-lg mt-1" id="nav-futures">⚡<br><span class="text-[10px]">선물</span></button>
+                <button onclick="switchTab('realestate')" class="nav-item flex-1 min-w-[60px] py-2 text-center text-gray-400 rounded-lg mt-1" id="nav-realestate">🏢<br><span class="text-[10px]">부동산</span></button>
+                <button onclick="switchTab('casino')" class="nav-item flex-1 min-w-[60px] py-2 text-center text-gray-400 rounded-lg mt-1" id="nav-casino">🎰<br><span class="text-[10px]">도박</span></button>
+                <button onclick="switchTab('shop')" class="nav-item flex-1 min-w-[60px] py-2 text-center text-gray-400 rounded-lg mt-1" id="nav-shop">🛍️<br><span class="text-[10px]">상점</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- 모달들 -->
+    <div id="trade-modal" class="fixed inset-0 modal-backdrop hidden z-[70] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5">
+            <h3 id="modal-title" class="font-bold text-lg mb-2">매매</h3>
+            <div class="flex items-center justify-center gap-2 mb-4">
+                <button onclick="adjustQty(-1)" class="w-10 h-10 border rounded-full">-</button>
+                <input type="number" id="input-qty" class="w-20 text-center border-b-2 text-xl font-bold" value="1">
+                <button onclick="adjustQty(1)" class="w-10 h-10 border rounded-full">+</button>
+            </div>
+            <div class="grid grid-cols-4 gap-2 mb-4">
+                <button onclick="setQtyPercent(0.1)" class="bg-gray-100 py-2 rounded text-xs">10%</button>
+                <button onclick="setQtyPercent(0.5)" class="bg-gray-100 py-2 rounded text-xs">50%</button>
+                <button onclick="setQtyPercent(1)" class="bg-indigo-100 text-indigo-600 py-2 rounded text-xs">MAX</button>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="closeModal()" class="flex-1 py-3 border rounded-xl">취소</button>
+                <button id="btn-trade-confirm" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold">주문</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="house-modal" class="fixed inset-0 modal-backdrop hidden z-[90] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-6 text-center shadow-2xl">
+            <div id="house-emoji" class="text-6xl mb-4"></div>
+            <h2 id="house-title" class="text-2xl font-bold mb-2"></h2>
+            <p id="house-desc" class="text-gray-500 text-sm mb-6"></p>
+            <button onclick="document.getElementById('house-modal').classList.add('hidden')" class="w-full py-3 bg-gray-800 text-white rounded-xl">닫기</button>
+        </div>
+    </div>
+
+    <div id="walk-modal" class="fixed inset-0 modal-backdrop hidden z-[90] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-6 text-center shadow-2xl">
+            <div class="text-6xl mb-4 animate-bounce">🚶</div>
+            <h3 class="text-xl font-bold mb-2">산책 중...</h3>
+            <p class="text-gray-500 text-sm mb-4">누군가 당신을 쳐다봅니다.</p>
+            <div id="walk-result-area" class="hidden">
+                 <div id="walk-result-emoji" class="text-6xl mb-2"></div>
+                 <div id="walk-result-text" class="font-bold mb-4"></div>
+            </div>
+            <button id="btn-try-hunting" onclick="tryGetNumber()" class="w-full py-3 bg-pink-500 text-white rounded-xl font-bold mb-2">말 걸어보기</button>
+            <button onclick="closeWalkModal()" class="w-full py-3 border rounded-xl">나가기</button>
+        </div>
+    </div>
+
+    <div id="interaction-modal" class="fixed inset-0 modal-backdrop hidden z-[95] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-pink-50 p-4 flex justify-between items-center">
+                <h3 id="interact-title" class="font-bold text-pink-700"></h3>
+                <button onclick="closeInteractModal()" class="text-gray-400">&times;</button>
+            </div>
+            <div class="p-6 text-center">
+                <div id="interact-emoji" class="text-6xl mb-4"></div>
+                <div id="ai-talk-response" class="hidden mb-4 bg-white border-2 border-purple-100 p-3 rounded-xl text-sm text-gray-700 font-medium shadow-sm"></div>
+                <div class="flex justify-center items-center gap-2 mb-4">
+                    <div class="text-xs font-bold text-gray-500">Love</div>
+                    <div class="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div id="interact-love-bar" class="h-full bg-pink-500 transition-all" style="width: 0%"></div>
+                    </div>
+                    <div id="interact-love-val" class="text-xs font-bold text-pink-600">0%</div>
+                </div>
+                <div class="grid grid-cols-1 gap-2" id="interact-buttons"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="oddeven-double-modal" class="fixed inset-0 modal-backdrop hidden z-[99] flex items-center justify-center p-4">
+        <div class="bg-slate-900 w-full max-w-sm rounded-3xl p-6 text-center shadow-2xl border-2 border-yellow-500 relative overflow-hidden">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-500/20 via-slate-900 to-slate-900 pointer-events-none"></div>
+            <div class="relative z-10">
+                <div class="text-5xl mb-2">🚀</div>
+                <h2 class="text-2xl font-black text-white italic mb-1">DOUBLE UP!</h2>
+                <p class="text-yellow-400 font-bold text-lg mb-6" id="double-up-msg">현재 당첨금: 0원</p>
+                <div class="bg-slate-800 rounded-xl p-4 mb-6 border border-slate-700">
+                    <div class="text-gray-400 text-xs mb-1">다음 도전 성공 시</div>
+                    <div class="text-3xl font-black text-white" id="double-up-next-amount">0원</div>
+                    <div class="text-sm text-yellow-500 font-bold mt-1" id="double-up-rate-badge">5배 도전!</div>
+                </div>
+                <div class="grid grid-cols-1 gap-3">
+                    <button onclick="continueDoubleUp()" class="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black rounded-xl shadow-lg shadow-red-900/50 active:scale-95 transition text-xl flex items-center justify-center gap-2 group">
+                        <span>🔥 도전하기</span>
+                        <span class="text-sm font-normal opacity-70 group-hover:animate-pulse">(확률 50%)</span>
+                    </button>
+                    <button onclick="stopDoubleUp()" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-gray-300 font-bold rounded-xl shadow-lg active:scale-95 transition">
+                        💰 여기서 멈추고 받기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="gift-select-modal" class="fixed inset-0 modal-backdrop hidden z-[98] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-4 border-b flex justify-between">
+                <h3 class="font-bold text-gray-800">선물함</h3>
+                <button onclick="closeGiftSelectModal()" class="text-gray-400">&times;</button>
+            </div>
+            <div class="p-4 h-64 overflow-y-auto" id="gift-item-list"></div>
+        </div>
+    </div>
+
+    <!-- 데이터 불러오기 모달 (V11 Safe Mode) -->
+    <div id="load-game-modal" class="fixed inset-0 modal-backdrop hidden z-[110] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-green-600 flex items-center gap-2">💵 현금 데이터 복구</h3>
+                <button onclick="closeLoadGameModal()" class="text-gray-400 text-xl">&times;</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">
+                복사해둔 코드를 붙여넣으세요.<br>
+                <span class="text-green-600 font-bold">안전 모드: 저장된 '현금'만 현재 상태에 덮어씁니다.</span>
+            </p>
+            <textarea id="load-code-input" class="w-full h-32 p-3 bg-gray-100 rounded-xl border border-gray-300 text-xs font-mono mb-4 focus:border-indigo-500 outline-none resize-none allow-select" placeholder="여기에 저장 코드를 붙여넣기..."></textarea>
+            <div class="flex gap-2">
+                <button onclick="closeLoadGameModal()" class="flex-1 py-3 border rounded-xl font-bold text-gray-500">취소</button>
+                <button onclick="importSaveData()" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg active:scale-95 transition">현금 복구 실행</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 저장 코드 확인 모달 (복사 실패 시 수동 복사용) -->
+    <div id="manual-save-modal" class="fixed inset-0 modal-backdrop hidden z-[110] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5">
+            <h3 class="font-bold text-lg mb-2">저장 코드 생성 완료</h3>
+            <p class="text-xs text-gray-500 mb-3">아래 코드를 전체 선택 후 복사하여<br>카카오톡 나에게 보내기나 메모장에 저장하세요.</p>
+            <textarea id="manual-save-code" class="w-full h-32 p-3 bg-gray-100 rounded-xl border border-gray-300 text-xs font-mono mb-4 focus:border-indigo-500 outline-none resize-none allow-select" readonly></textarea>
+            <button onclick="document.getElementById('manual-save-modal').classList.add('hidden')" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold">닫기</button>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-24 left-0 right-0 flex flex-col items-center z-[80] pointer-events-none space-y-2"></div>
+<script src="js/ALL/mock_api.js"></script>
+<script src="js/ALL/config_state.js"></script>
+<script src="js/ALL/utils_save.js"></script>
+<script src="js/ALL/game_logic.js"></script>
+<script src="js/ALL/ui_render_tabs.js"></script>
+<script src="js/MyTap/man.js"></script>
+<script src="js/stock/stock.js"></script>
+<script src="js/coin/exchange.js"></script>
+<script src="js/house/real_estate.js"></script>
+<script src="js/casino/casino.js"></script>
+<script src="js/casino/Blackjack.js"></script>
+<script src="js/app/boot.js"></script>
+
+
+</body>
+</html>
