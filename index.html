@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIS.COM - Digital Life Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="min-h-screen font-sans selection:bg-black selection:text-white flex flex-col text-sm tracking-tight transition-colors bg-cover bg-center bg-fixed text-[#111]" id="body-bg">
+
+    <nav class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-100/50 shadow-sm transition-all">
+        <div class="max-w-screen-xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer group relative" onclick="window.location.reload()">
+                <div class="w-6 h-6 bg-black flex items-center justify-center transition-transform group-hover:scale-110">
+                    <span class="text-white font-bold text-xs">D</span>
+                </div>
+                <div class="flex flex-col leading-none">
+                    <h1 class="text-lg font-black tracking-tighter editable-text" data-key="nav_title">DIS.COM</h1>
+                </div>
+                <button onclick="event.stopPropagation(); window.openTextEdit('nav_title')" class="admin-edit-btn hidden ml-2 text-gray-400 hover:text-black"><i data-lucide="pencil" class="w-3 h-3"></i></button>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <button onclick="window.openModal('modal-stats')" class="flex items-center gap-1.5 text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                    <i data-lucide="users" class="w-3 h-3"></i>
+                    <span id="label-visitors">Live:</span>
+                    <span class="text-green-600 font-bold animate-pulse" id="visitor-count">...</span>
+                </button>
+
+                <div class="h-4 w-px bg-gray-200"></div>
+
+                <button onclick="window.toggleLang()" class="flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 hover:bg-gray-100 rounded transition-all">
+                    <i data-lucide="globe" class="w-3 h-3"></i>
+                    <span id="current-lang">KO</span>
+                </button>
+
+                <div id="admin-panel" class="hidden flex items-center gap-2">
+                    <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 flex items-center gap-1">
+                        <i data-lucide="shield-check" class="w-3 h-3"></i> ADMIN
+                    </span>
+                    <button onclick="window.openModal('modal-settings')" class="p-1.5 text-gray-600 hover:text-black hover:bg-gray-100 rounded border border-gray-200" title="사이트 설정">
+                        <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button onclick="window.openUploadModal()" class="flex items-center gap-1.5 bg-black hover:bg-gray-800 text-white border border-black px-3 py-1.5 transition-all text-[10px] font-bold">
+                        <i data-lucide="plus" class="w-3 h-3"></i> ADD
+                    </button>
+                    <button onclick="window.logout()" class="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded border border-transparent hover:border-red-100">
+                        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                <button id="btn-login" onclick="window.openAuthModal('login')" class="flex items-center gap-1.5 text-[10px] font-bold uppercase px-3 py-1 bg-black text-white border border-black hover:bg-gray-800 transition-all">
+                    <i data-lucide="log-in" class="w-3 h-3"></i> <span>LOGIN</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow w-full max-w-screen-xl mx-auto px-6 py-10 fade-in">
+        <section class="relative mb-16 group bg-white shadow-2xl overflow-hidden rounded-sm">
+            <div class="relative w-full aspect-[21/9] md:aspect-[3/1] bg-gray-100 overflow-hidden">
+                <img id="hero-image" src="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2070&auto=format&fit=crop" class="w-full h-full object-cover grayscale contrast-125 hover:grayscale-0 transition-all duration-1000 ease-in-out">
+                <div class="absolute bottom-0 left-0 p-8 md:p-12 bg-gradient-to-t from-black/90 to-transparent w-full">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="editable-text text-white/80 text-[10px] uppercase tracking-[0.3em] block whitespace-pre-wrap" data-key="hero_sub">현실과 가상의 경계가 무너진 공간.\n이곳에서 시뮬레이션을 경험하세요.</span>
+                        <button onclick="window.openTextEdit('hero_sub')" class="admin-edit-btn hidden text-white/50 hover:text-white"><i data-lucide="pencil" class="w-3 h-3"></i></button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="editable-text text-white text-4xl md:text-6xl font-black tracking-tighter leading-none whitespace-pre-wrap" data-key="hero_main">디지털<br>시뮬레이션 게임</h2>
+                        <button onclick="window.openTextEdit('hero_main')" class="admin-edit-btn hidden text-white/50 hover:text-white mt-2"><i data-lucide="pencil" class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="flex justify-between items-end border-b-2 border-black/80 pb-3 mb-8 bg-white/50 backdrop-blur-sm rounded px-4">
+            <div class="flex items-center gap-2">
+                <h3 class="editable-text text-lg font-black tracking-tight uppercase" data-key="section_title">플레이</h3>
+                <button onclick="window.openTextEdit('section_title')" class="admin-edit-btn hidden text-gray-400 hover:text-black"><i data-lucide="pencil" class="w-3 h-3"></i></button>
+            </div>
+            <div class="text-[10px] font-mono text-gray-500">TOTAL: <span id="total-count">...</span></div>
+        </div>
+
+        <div id="game-grid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-10">
+            </div>
+    </main>
+
+    <footer class="border-t border-black/80 mt-12 py-8 bg-white/90 text-center backdrop-blur-sm">
+        <h4 class="font-black text-sm mb-1 tracking-widest editable-text" data-key="footer_logo">DIS.COM</h4>
+        <p class="text-[10px] text-gray-400 uppercase">© 2025 REALTIME SIMULATION PLATFORM.</p>
+    </footer>
+
+    <div id="modal-auth" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 hidden">
+        <div class="w-full max-w-sm bg-white p-8 shadow-2xl relative border border-black/80">
+            <button onclick="window.closeModal('modal-auth')" class="absolute top-4 right-4 text-gray-400 hover:text-black"><i data-lucide="x" class="w-4 h-4"></i></button>
+            
+            <div class="flex border-b border-black/80 mb-6">
+                <button onclick="window.switchAuthTab('login')" id="tab-login" class="flex-1 pb-2 text-xs font-bold border-b-2 border-black">로그인</button>
+                <button onclick="window.switchAuthTab('signup')" id="tab-signup" class="flex-1 pb-2 text-xs font-bold text-gray-400 border-transparent">회원가입</button>
+                <button onclick="window.switchAuthTab('forgot')" id="tab-forgot" class="flex-1 pb-2 text-xs font-bold text-gray-400 border-transparent">PW 찾기</button>
+            </div>
+
+            <form id="form-login" onsubmit="window.handleAuthLogin(event)" class="space-y-4">
+                <input type="text" id="login-id" placeholder="이메일 또는 아이디" class="w-full border-b border-black/80 py-2 text-sm focus:outline-none focus:border-black">
+                <input type="password" id="login-pw" placeholder="비밀번호" class="w-full border-b border-black/80 py-2 text-sm focus:outline-none focus:border-black">
+                <button type="submit" class="w-full bg-black text-white py-3 font-bold text-xs hover:bg-gray-800 mt-2">로그인</button>
+            </form>
+
+            <form id="form-signup" onsubmit="window.handleAuthSignup(event)" class="space-y-4 hidden">
+                <input type="email" id="signup-email" placeholder="이메일 (인증 필수)" required class="w-full border-b border-black/80 py-2 text-sm focus:outline-none focus:border-black">
+                <input type="text" id="signup-username" placeholder="아이디 (공개 닉네임)" required class="w-full border-b border-black/80 py-2 text-sm focus:outline-none focus:border-black">
+                <input type="password" id="signup-pw" placeholder="비밀번호 (6자 이상)" required class="w-full border-b border-black/80 py-2 text-sm focus:outline-none focus:border-black">
+                <button type="submit" class="w-full bg-black text-white py-3 font-bold text-xs hover:bg-gray-800 mt-2">가입 및 인증메일 발송</button>
+            </form>
+
+            <form id="form-forgot" onsubmit="window.handleAuthForgot(event)" class="space-y-4 hidden">
+                <p class="text-[10px] text-gray-500 mb-2">가입한 이메일을 입력하면 재설정 링크를 보내드립니다.</p>
+                <input type="email" id="forgot-email" placeholder="이메일" required class="w-full border-b border-black/80 py-2 text-sm focus:outline-none focus:border-black">
+                <button type="submit" class="w-full bg-black text-white py-3 font-bold text-xs hover:bg-gray-800 mt-2">이메일 발송</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-upload" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 hidden">
+        <div class="w-full max-w-lg bg-white p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onclick="window.closeModal('modal-upload')" class="absolute top-6 right-6 text-gray-400 hover:text-black"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h2 class="text-2xl font-black mb-6">UPLOAD</h2>
+            
+            <form onsubmit="window.handleUpload(event)" class="space-y-5">
+                <input type="hidden" id="edit-id">
+                
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-gray-500">제목</label>
+                    <input type="text" id="up-title" required class="w-full border-b border-black/80 py-2 text-lg font-bold focus:outline-none focus:border-black">
+                </div>
+
+                <div class="flex items-center gap-4 py-2 border-b border-gray-100">
+                    <span class="text-xs font-bold text-gray-500">공개 설정</span>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="visibility" value="public" checked class="accent-black">
+                        <span class="text-sm">전체 공개</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer text-red-600">
+                        <input type="radio" name="visibility" value="private" class="accent-black">
+                        <i data-lucide="lock" class="w-3 h-3"></i> <span class="text-sm">비공개</span>
+                    </label>
+                </div>
+
+                <!-- ✅ [추가] 관리자: 끌어올리기 / NEW / BEST -->
+                <div class="flex items-center gap-4 py-2 border-b border-gray-100">
+                    <span class="text-xs font-bold text-gray-500">관리자 기능</span>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="up-bump" class="accent-black">
+                        <span class="text-sm">끌어올리기(1순위)</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="up-badge-new" class="accent-black">
+                        <span class="text-sm">NEW</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="up-badge-best" class="accent-black">
+                        <span class="text-sm">BEST</span>
+                    </label>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-gray-500">짧은 설명</label>
+                    <input type="text" id="up-desc" required class="w-full border-b border-black/80 py-2 text-sm focus:outline-none focus:border-black">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-gray-500">게시글 상세 내용 (Rich Content)</label>
+                    <textarea id="up-content" class="w-full border border-gray-200 p-3 h-32 text-sm resize-none focus:outline-none focus:border-black rounded"></textarea>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-gray-500">게임 URL</label>
+                    <input type="text" id="up-url" required class="w-full border-b border-black/80 py-2 text-sm text-blue-600 font-mono focus:outline-none focus:border-black">
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-gray-500">썸네일 이미지</label>
+                    <p class="text-[10px] text-gray-400">권장 사이즈: 800 x 600px (4:3)</p>
+                    <div class="relative border-2 border-dashed border-gray-300 rounded p-4 text-center hover:bg-gray-50 transition-colors group">
+                        <input type="file" accept="image/*" onchange="window.handleFileSelect(event, 'up-thumb')" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <div class="flex flex-col items-center justify-center text-gray-400">
+                            <i data-lucide="image" class="w-6 h-6 mb-1 group-hover:text-black"></i>
+                            <span class="text-xs">클릭 또는 드래그하여 업로드</span>
+                        </div>
+                    </div>
+                    <input type="text" id="up-thumb" placeholder="또는 이미지 URL 입력..." class="w-full border-b border-black/80 py-2 text-xs focus:outline-none focus:border-black mt-1">
+                </div>
+
+                <button type="submit" class="w-full bg-black text-white py-4 font-bold hover:bg-gray-800 tracking-widest text-sm">저장하기</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-settings" class="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 hidden">
+        <div class="w-full max-w-sm bg-white p-6 shadow-2xl relative">
+            <button onclick="window.closeModal('modal-settings')" class="absolute top-4 right-4 text-gray-400 hover:text-black"><i data-lucide="x" class="w-4 h-4"></i></button>
+            <h2 class="text-lg font-black mb-6 flex items-center gap-2"><i data-lucide="settings" class="w-5 h-5"></i> 사이트 설정</h2>
+            
+            <form onsubmit="window.handleSiteSettings(event)" class="space-y-6">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">배경 색상</label>
+                    <div class="flex items-center gap-2">
+                        <input type="color" id="set-bg-color" class="w-10 h-10 border border-gray-200 rounded cursor-pointer">
+                        <span class="text-xs font-mono" id="val-bg-color">#ffffff</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">배경 이미지</label>
+                    <p class="text-[10px] text-gray-400 mb-2">권장: 1920 x 1080px (FHD)</p>
+                    <div class="relative border-2 border-dashed border-gray-300 rounded p-4 text-center hover:bg-gray-50 transition-colors group">
+                        <input type="file" accept="image/*" onchange="window.handleFileSelect(event, 'set-bg-image')" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <div class="flex flex-col items-center justify-center text-gray-400">
+                            <i data-lucide="upload-cloud" class="w-6 h-6 mb-1 group-hover:text-black"></i>
+                            <span class="text-xs">이미지 업로드</span>
+                        </div>
+                    </div>
+                    <input type="text" id="set-bg-image" placeholder="Image URL..." class="w-full border-b border-black/80 py-2 text-sm focus:outline-none focus:border-black mt-2">
+                </div>
+                <button type="button" onclick="window.openModal('modal-banner')" class="w-full bg-white text-black py-3 text-xs font-bold border border-black hover:bg-gray-50 mb-2">배너(상단) 수정</button>
+                <button type="submit" class="w-full bg-black text-white py-3 text-xs font-bold hover:bg-gray-800">적용하기</button>
+            </form>
+        
+    <div id="modal-banner" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 hidden">
+        <div class="w-full max-w-lg bg-white p-6 shadow-2xl relative">
+            <button onclick="window.closeModal('modal-banner')" class="absolute top-4 right-4 text-gray-400 hover:text-black"><i data-lucide="x" class="w-4 h-4"></i></button>
+            <h2 class="text-lg font-black mb-4 flex items-center gap-2"><i data-lucide="image" class="w-5 h-5"></i> 배너 수정</h2>
+            <div class="space-y-4">
+                <p class="text-[11px] text-gray-500">이미지를 업로드한 뒤, 위/아래를 잘라내어(크롭) 저장할 수 있습니다.</p>
+                <div class="relative border-2 border-dashed border-gray-300 rounded p-4 text-center hover:bg-gray-50 transition-colors group">
+                    <input type="file" accept="image/*" onchange="window.handleBannerFile(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <div class="flex flex-col items-center justify-center text-gray-400">
+                        <i data-lucide="upload-cloud" class="w-6 h-6 mb-1 group-hover:text-black"></i>
+                        <span class="text-xs">배너 이미지 업로드</span>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-3 rounded border border-black/20">
+                    <div class="flex items-center justify-between text-[11px] font-mono text-gray-600 mb-2">
+                        <span>미리보기</span>
+                        <span id="banner-dim">-</span>
+                    </div>
+                    <canvas id="banner-canvas" class="w-full rounded border border-black/40" style="height:180px;"></canvas>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">위쪽 자르기 (%)</label>
+                        <input type="range" id="banner-crop-top" min="0" max="45" value="0" class="w-full accent-black" oninput="window.renderBannerPreview()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">아래쪽 자르기 (%)</label>
+                        <input type="range" id="banner-crop-bottom" min="0" max="45" value="0" class="w-full accent-black" oninput="window.renderBannerPreview()">
+                    </div>
+                </div>
+
+                <button onclick="window.saveBanner()" class="w-full bg-black text-white py-3 text-xs font-bold hover:bg-gray-800">배너 저장(업로드)</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+    </div>
+
+    <div id="modal-stats" class="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 hidden">
+        <div class="w-full max-w-sm bg-white p-6 shadow-2xl relative">
+            <button onclick="window.closeModal('modal-stats')" class="absolute top-4 right-4 text-gray-400 hover:text-black"><i data-lucide="x" class="w-4 h-4"></i></button>
+            <h2 class="text-lg font-black mb-6">실시간 접속자 통계</h2>
+            <div class="space-y-4">
+                <div class="bg-gray-50 p-4 rounded text-center">
+                    <p class="text-xs text-gray-500 mb-1">현재 접속자 (Live)</p>
+                    <p class="text-3xl font-black text-green-600" id="stat-live">...</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-gray-50 p-4 rounded text-center">
+                        <p class="text-xs text-gray-500 mb-1">오늘 방문</p>
+                        <p class="text-xl font-bold" id="stat-today">...</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded text-center">
+                        <p class="text-xs text-gray-500 mb-1">이번 달 방문</p>
+                        <p class="text-xl font-bold" id="stat-month">...</p>
+                    </div>
+                </div>
+                <p class="text-[10px] text-gray-400 text-center mt-4">* 실시간 데이터는 3초마다 갱신됩니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-text-edit" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 hidden">
+        <div class="w-full max-w-sm bg-white p-6 shadow-2xl relative">
+            <button onclick="window.closeModal('modal-text-edit')" class="absolute top-4 right-4 text-gray-400 hover:text-black"><i data-lucide="x" class="w-4 h-4"></i></button>
+            <h2 class="text-lg font-black mb-4">텍스트 수정</h2>
+            <form onsubmit="window.handleTextSave(event)" class="space-y-4">
+                <input type="hidden" id="edit-text-key">
+                <textarea id="input-text-edit" class="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-black resize-none h-32 rounded"></textarea>
+                <button type="submit" class="w-full bg-black text-white py-3 text-xs font-bold hover:bg-gray-800">저장 (영구반영)</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-player" class="fixed inset-0 z-50 bg-white flex flex-col hidden overflow-y-auto animate-in fade-in duration-200">
+        <div class="h-14 border-b border-black/80 flex items-center justify-between px-6 bg-white shrink-0 sticky top-0 z-50">
+            <div class="flex items-center gap-4">
+                <button onclick="window.closeModal('modal-player')" class="hover:bg-gray-100 p-2 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <div class="flex items-center gap-2">
+                    <h2 id="player-title" class="font-black text-sm">LOADING...</h2>
+                    <i id="player-lock-icon" data-lucide="lock" class="w-3 h-3 text-red-600 hidden"></i>
+                </div>
+            </div>
+        </div>
+        <div class="flex-grow flex flex-col items-center bg-[#f9f9f9]">
+            <div id="game-container" class="w-full bg-black relative shadow-lg h-[60vh] max-w-screen-xl mx-auto my-6 transition-all">
+                <iframe id="game-iframe" src="" class="w-full h-full border-0"></iframe>
+                <button onclick="window.toggleFullscreen()" class="absolute bottom-4 right-4 bg-black/50 hover:bg-black text-white p-2 rounded backdrop-blur-sm"><i data-lucide="maximize-2" class="w-5 h-5"></i></button>
+            </div>
+
+            <div class="w-full max-w-screen-lg mx-auto px-6 pb-20">
+                <div class="flex items-center justify-between border-b border-black/80 pb-4 mb-8">
+                    <div class="flex items-center gap-6 text-sm text-gray-600">
+                        <span class="flex items-center gap-2"><i data-lucide="eye" class="w-4 h-4"></i> <span id="player-views" class="font-bold">0</span></span>
+                        <span class="flex items-center gap-2 text-[11px] text-gray-500"><i data-lucide="clock" class="w-4 h-4"></i> <span id="player-updated">-</span></span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="window.handleLike()" class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:border-red-400 hover:text-red-500 rounded-full transition-all shadow-sm group">
+                            <i data-lucide="heart" class="w-4 h-4 group-hover:scale-110 transition-transform"></i> 
+                            <span id="player-likes" class="font-bold text-xs">0</span>
+                        </button>
+                        <button onclick="window.shareUrl()" class="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-full hover:bg-gray-800 transition-all shadow-sm">
+                            <i data-lucide="share-2" class="w-4 h-4"></i> 공유
+                        </button>
+                        <button id="btn-admin-edit-post" onclick="window.openUploadModal(window.__currentGameIdForEdit || null)" class="hidden flex items-center gap-2 px-4 py-2 bg-white border border-black text-black rounded-full hover:bg-gray-50 transition-all shadow-sm">
+                            <i data-lucide="pencil" class="w-4 h-4"></i> 수정
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-12">
+                    <h3 class="font-bold text-lg mb-4">상세 내용</h3>
+                    <div id="player-content" class="whitespace-pre-wrap text-gray-700 leading-relaxed bg-white p-8 rounded-lg border border-black/80 shadow-sm"></div>
+                </div>
+
+                <div class="bg-white p-8 rounded-lg border border-black/80 shadow-sm">
+                    <h3 class="font-bold text-lg mb-6 flex items-center gap-2">
+                        <i data-lucide="message-square" class="w-5 h-5"></i> 댓글
+                    </h3>
+                    
+                    <div id="comments-list" class="space-y-6 mb-8"></div>
+
+                    <form onsubmit="window.handleAddComment(event)" class="border-t border-black/80 pt-6">
+                        <div class="flex gap-2 mb-2">
+                            <input type="text" id="cmt-nick" placeholder="닉네임" required class="w-1/3 border border-gray-200 rounded px-3 py-2 text-sm focus:border-black outline-none">
+                            <input type="password" id="cmt-pw" placeholder="비밀번호 (삭제용)" required class="w-1/3 border border-gray-200 rounded px-3 py-2 text-sm focus:border-black outline-none">
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="cmt-text" placeholder="댓글을 입력하세요..." required class="flex-grow border border-gray-200 rounded px-3 py-2 text-sm focus:border-black outline-none">
+                            <button type="submit" class="bg-black text-white px-6 rounded font-bold text-xs hover:bg-gray-800">등록</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
