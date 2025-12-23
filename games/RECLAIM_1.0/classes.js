@@ -460,24 +460,31 @@ class Unit extends Entity {
             ctx.restore();
         }
         else if (id === 'chinook') {
-            // [수정] 치누크: 프로펠러 일자 (ㅡ) 앞뒤 2개
+            // Chinook body
             ctx.fillStyle = '#4b5563';
-            ctx.beginPath(); ctx.moveTo(-30, -10); ctx.lineTo(30, -10); ctx.lineTo(35, -20); ctx.lineTo(35, 5); ctx.lineTo(-35, 5); ctx.lineTo(-35, -20); ctx.fill();
-            ctx.fillStyle = '#1f2937'; ctx.fillRect(-25, 5, 8, 4); ctx.fillRect(15, 5, 8, 4);
+            ctx.beginPath();
+            ctx.moveTo(-30, -10); ctx.lineTo(30, -10); ctx.lineTo(35, 5);
+            ctx.lineTo(35, 5); ctx.lineTo(-35, 5); ctx.lineTo(-35, -20);
+            ctx.fill();
+            ctx.fillStyle = '#1f2937';
+            ctx.fillRect(-25, 5, 8, 4);
+            ctx.fillRect(15, 5, 8, 4);
 
-            ctx.fillStyle = '#000';
-            // 전방 로터
-            ctx.save();
-            ctx.translate(-35, -20);
-            ctx.fillRect(-40, -2, 80, 4);
-            ctx.restore();
-            // 후방 로터
-            ctx.save();
-            ctx.translate(35, -20);
-            // 약간의 위상차를 주어 자연스럽게
-            ctx.scale(Math.cos(this.rotorAngle), 1);
-            ctx.fillRect(-40, -2, 80, 4);
-            ctx.restore();
+            // Rotors: simple line with rotation
+            const drawRotor = (x, y, phase) => {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(this.rotorAngle * 6 + phase);
+
+                ctx.fillStyle = '#000';
+                ctx.fillRect(-40, -2, 80, 4);
+
+                ctx.restore();
+            };
+
+            // Front/back rotors
+            drawRotor(-35, -20, 0);
+            drawRotor(35, -20, Math.PI * 0.35);
         }
         else if (id === 'apc') { ctx.fillStyle = this.team === 'player' ? '#6366f1' : '#7f1d1d'; ctx.fillRect(-20, -16, 40, 16); ctx.fillStyle = '#4338ca'; ctx.fillRect(-15, -22, 30, 6); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-12, 0, 6, 0, Math.PI * 2); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.arc(12, 0, 6, 0, Math.PI * 2); ctx.fill(); }
         else if (id === 'aa_tank') { ctx.fillRect(-22, -14, 44, 14); ctx.fillStyle = '#1e293b'; ctx.fillRect(-12, -22, 24, 8); ctx.save(); ctx.translate(0, -22); ctx.rotate(-Math.PI / 3); ctx.fillRect(-2, -12, 4, 12); ctx.fillRect(4, -12, 4, 12); ctx.restore(); ctx.fillStyle = '#000'; ctx.fillRect(-24, -4, 48, 4); }

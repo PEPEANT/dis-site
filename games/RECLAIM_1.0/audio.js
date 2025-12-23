@@ -51,20 +51,39 @@ const AudioSystem = {
     },
 
     playMP3(index) {
+        // Avoid rapid pause->play races (AbortError + sometimes silence)
+        const nextPath = `BGM/BGM_${index}.mp3`;
+
+        // Already playing same track -> just refresh volume
+        if (this.bgmEl && this.bgmEl.dataset && this.bgmEl.dataset.src === nextPath && !this.bgmEl.paused) {
+            this.currentBgmIndex = index;
+            this.bgmEl.volume = this.volume.bgm * this.volume.master;
+            return;
+        }
+
+        // Stop previous safely
         if (this.bgmEl) {
-            this.bgmEl.pause();
+            try { this.bgmEl.pause(); } catch (e) {}
+            try { this.bgmEl.currentTime = 0; } catch (e) {}
             this.bgmEl = null;
         }
 
         this.currentBgmIndex = index;
-        const path = `BGM/BGM_${index}.mp3`;
-        console.log("Playing BGM:", path);
+        console.log("Playing BGM:", nextPath);
 
-        this.bgmEl = new Audio(path);
-        this.bgmEl.loop = true;
-        this.bgmEl.volume = this.volume.bgm * this.volume.master;
+        const el = new Audio(nextPath);
+        el.dataset.src = nextPath;
+        el.loop = true;
+        el.preload = 'auto';
+        el.volume = this.volume.bgm * this.volume.master;
 
-        this.bgmEl.play().catch(e => console.warn("Audio Play Error:", e));
+        // Store first, then play (prevents play() being interrupted by later pause())
+        this.bgmEl = el;
+
+        const p = el.play();
+        if (p && typeof p.catch === 'function') {
+            p.catch(e => console.warn("Audio Play Error:", e));
+        }
     },
 
     stopBGM() {

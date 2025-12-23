@@ -538,10 +538,17 @@ const game = {
 
     queueUnit(key) {
         const u = CONFIG.units[key];
+
         // Special logic for targeting
         const needsTargeting = ['tactical_drone', 'bomber_drone', 'blackhawk', 'chinook', 'emp', 'nuke'].includes(key);
         if (needsTargeting) {
-            if (this.holdTimer) clearInterval(this.holdTimer);
+            // [FIX] Clear holdTimer value so startHold can run again.
+            if (this.holdTimer) {
+                clearInterval(this.holdTimer);
+                this.holdTimer = null;
+            }
+            this.holdKey = null;
+
             this.prepareTargeting(key);
             return;
         }
@@ -916,17 +923,18 @@ const app = {
     markDirty() { this._dirty = true; },
 
     commit(reason = '') {
-        // dirty 아니면 빠르게 종료 (단일 갱신 비용 최소화)
-        if (!this._dirty) return;
+        // Always refresh UI; only save when state is dirty.
+        const wasDirty = this._dirty;
         this._dirty = false;
 
-        // [UI 단일 갱신]
-        // 기존 renderUI에서 하던 UI 업데이트를 여기로 집결
+        // UI refresh
         ui.updateUnitButtons(game.currentCategory, game.playerStock, game.cooldowns, game.supply, game.spawnQueue);
         ui.setSkillCount('emp', game.skillCharges.emp);
         ui.setSkillCount('nuke', game.skillCharges.nuke);
 
-        // 저장은 너무 잦으면 부담 → 1초 쿨다운(최소)
+        if (!wasDirty) return;
+
+        // Save state at most once per second
         const now = performance.now ? performance.now() : Date.now();
         if (now - this._lastSaveAt > 1000) this.saveNow();
     },
