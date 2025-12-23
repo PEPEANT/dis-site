@@ -1,0 +1,106 @@
+/* 폰트 가져오기 */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+body {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    word-break: keep-all;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+
+.fade-in { animation: fadeIn 0.3s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* 유틸리티 */
+.admin-edit-btn {
+    transition: opacity 0.2s;
+}
+.group:hover .admin-edit-btn {
+    opacity: 1;
+}
+
+/* ✅ NEW / BEST badge */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:2px 8px;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.5px;
+  border-radius:999px;
+  color:#fff;
+  background:#111;
+  border:1px solid rgba(255,255,255,.25);
+  box-shadow:0 4px 12px rgba(0,0,0,.18);
+  user-select:none;
+}
+.badge-new{ background:#ff2d55; }
+.badge-best{ background:#ffb300; color:#111; border-color:rgba(0,0,0,.15); }
+
+/* Player menu (inside modal-player) */
+.player-menu{
+  position: sticky;
+  top: 56px;
+  z-index: 60;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  background: #fff;
+  border-bottom: 1px solid rgba(0,0,0,.15);
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
+}
+.player-menu-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+.player-menu-title{
+  font-weight: 900;
+  letter-spacing: .08em;
+  font-size: 12px;
+}
+.player-menu-close{
+  padding: 6px;
+  border-radius: 999px;
+}
+.player-menu-close:hover{ background:#f3f4f6; }
+
+.player-menu-body{ padding: 12px 16px 16px; }
+.player-menu-section{
+  font-size: 11px;
+  font-weight: 800;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+.player-menu-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.player-menu-item{
+  width:100%;
+  text-align:left;
+  padding: 10px 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  background:#fff;
+  border-radius: 12px;
+}
+.player-menu-item:hover{
+  border-color: rgba(0,0,0,.25);
+  box-shadow: 0 8px 20px rgba(0,0,0,.06);
+}
+.player-menu-item-title{
+  font-weight: 800;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.player-menu-item-tags{
+  display:flex;
+  gap:6px;
+}
