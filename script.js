@@ -375,6 +375,14 @@ window.openUploadModal = (editId = null) => {
     const form = document.querySelector('#modal-upload form');
     form.reset();
     document.getElementById('edit-id').value = '';
+
+    // 기본 초기화
+    const bumpChk = document.getElementById('up-bump');
+    const newChk  = document.getElementById('up-badge-new');
+    const bestChk = document.getElementById('up-badge-best');
+    if (bumpChk) bumpChk.checked = false;   // ✅ “누르면 끌어올리기”니까 기본 false
+    if (newChk) newChk.checked = false;
+    if (bestChk) bestChk.checked = false;
     
     if (editId) {
         const game = gamesData.find(g => g.id === editId);
@@ -384,6 +392,10 @@ window.openUploadModal = (editId = null) => {
         document.getElementById('up-content').value = game.content || "";
         document.getElementById('up-url').value = game.url;
         document.getElementById('up-thumb').value = game.thumb;
+
+        // ✅ 배지는 “내가 의도적으로 설정”
+        if (newChk) newChk.checked = !!game.badgeNew;
+        if (bestChk) bestChk.checked = !!game.badgeBest;
         
         const radios = document.getElementsByName('visibility');
         radios[0].checked = !game.isPrivate;
@@ -402,13 +414,22 @@ window.handleUpload = async (e) => {
     const editId = document.getElementById('edit-id').value;
     const isPrivate = document.querySelector('input[name="visibility"]:checked').value === 'private';
 
+    // ✅ 관리자 입력값
+    const bump = !!document.getElementById('up-bump')?.checked;              // 끌어올리기 버튼(체크)
+    const badgeNew = !!document.getElementById('up-badge-new')?.checked;     // NEW
+    const badgeBest = !!document.getElementById('up-badge-best')?.checked;   // BEST
+
     const baseData = {
         title: document.getElementById('up-title').value,
         desc: document.getElementById('up-desc').value,
         content: document.getElementById('up-content').value,
         url: document.getElementById('up-url').value,
         thumb: document.getElementById('up-thumb').value,
-        isPrivate: isPrivate
+        isPrivate: isPrivate,
+
+        // ✅ “내가 의도적으로 설정”되는 뱃지 값
+        badgeNew,
+        badgeBest
     };
 
     try {
@@ -419,6 +440,7 @@ window.handleUpload = async (e) => {
                 updatedAt: serverTimestamp(),
                 updatedDateString: new Date().toLocaleString('ko-KR')
             };
+            if (bump) data.bumpAt = Date.now();
             await updateDoc(doc(db, "games", editId), data);
         } else {
             // 신규 생성
@@ -432,6 +454,7 @@ window.handleUpload = async (e) => {
                 likes: 0,
                 comments: []
             };
+            if (bump) data.bumpAt = Date.now();
             await addDoc(GAMES_REF, data);
         }
         window.closeModal('modal-upload');
