@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GRAND CASINO (Slot Integrated)</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- HUD -->
+  <div id="ui-layer">
+    <div class="hud-box">
+      <h1 class="hud-title">GRAND CASINO</h1>
+      <p class="hud-sub">위치: <span id="location-text">카지노 로비</span></p>
+    </div>
+    <div class="hud-box">
+      <p class="hud-money">💰 잔고: <span id="money-display">₩0</span></p>
+    </div>
+    <div class="hud-box hud-help">
+      <div>이동: WASD / 방향키</div>
+      <div>슬롯: 슬롯 근처에서 <b>SPACE</b></div>
+      <div>닫기: <b>ESC</b></div>
+    </div>
+  </div>
+
+  <div id="interaction-prompt" class="interaction-prompt">SPACE를 눌러 슬롯머신</div>
+
+  <!-- Mobile Joystick -->
+  <div id="joystick-zone">
+    <div id="joystick-knob"></div>
+  </div>
+
+  <!-- Mobile Action Button (SPACE replacement) -->
+  <button id="mobile-action" class="mobile-action" type="button">INTERACT</button>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- SLOT MODAL -->
+  <div id="slot-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="slot-backdrop"></div>
+
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="슬롯머신">
+      <div class="modal-topbar">
+        <div class="modal-title">SLOT MACHINE</div>
+        <button class="modal-close" id="slot-close-btn" type="button">닫기 (ESC)</button>
+      </div>
+
+      <!-- 슬롯 머신 (디자인 유지) -->
+      <div class="slot-wrap">
+        <div class="game-container">
+          <canvas id="slotCanvas" width="400" height="240"></canvas>
+
+          <div class="control-panel">
+            <div class="status-bar">
+              <div class="lcd-display">
+                <span class="label">CREDIT</span>
+                <span id="creditDisplay" class="value">0</span>
+              </div>
+              <div class="lcd-display">
+                <span class="label">WIN</span>
+                <span id="winDisplay" class="value">0</span>
+              </div>
+            </div>
+
+            <div class="msg-box" id="msgArea">레버를 당겨주세요!</div>
+
+            <div class="buttons">
+              <button class="bet-btn" data-bet="10" type="button">10칩</button>
+              <button class="bet-btn" data-bet="50" type="button">50칩</button>
+              <button class="bet-btn active" data-bet="100" type="button">100칩(MAX)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- /슬롯 -->
+    </div>
+  </div>
+
+  <!-- EXCHANGE MODAL (추가) -->
+  <div id="exchange-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="exchange-backdrop"></div>
+
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="환전소">
+      <div class="modal-topbar">
+        <div class="modal-title">EXCHANGE</div>
+        <button class="modal-close" id="exchange-close-btn" type="button">닫기 (ESC)</button>
+      </div>
+
+      <div class="slot-wrap">
+        <div class="game-container">
+          <div class="control-panel" style="border-top: 2px solid #444; border-radius: 12px;">
+            <div class="status-bar">
+              <div class="lcd-display">
+                <span class="label">CASH (₩)</span>
+                <span id="exchangeCash" class="value">0</span>
+              </div>
+              <div class="lcd-display">
+                <span class="label">CHIPS</span>
+                <span id="exchangeChips" class="value">0</span>
+              </div>
+            </div>
+
+            <div class="msg-box" id="exchangeMsg">환전할 금액(칩)을 선택하세요!</div>
+
+            <div class="buttons" style="flex-wrap: wrap;">
+              <!-- cash -> chips (RATE = ₩1000 / 1칩) -->
+              <button class="bet-btn xchg-btn" data-dir="C2H" data-amount="10" type="button">₩1만 → 10칩</button>
+              <button class="bet-btn xchg-btn" data-dir="C2H" data-amount="50" type="button">₩5만 → 50칩</button>
+              <button class="bet-btn xchg-btn" data-dir="C2H" data-amount="100" type="button">₩10만 → 100칩</button>
+
+              <!-- chips -> cash -->
+              <button class="bet-btn xchg-btn" data-dir="H2C" data-amount="10" type="button">10칩 → ₩1만</button>
+              <button class="bet-btn xchg-btn" data-dir="H2C" data-amount="50" type="button">50칩 → ₩5만</button>
+              <button class="bet-btn xchg-btn" data-dir="H2C" data-amount="100" type="button">100칩 → ₩10만</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JS (분리/순서 중요) -->
+  <script src="./money.js"></script>
+  <script src="./slotMachine.js"></script>
+  <script src="./exchange.js"></script>
+  <script src="./casino.js"></script>
+</body>
+</html>
